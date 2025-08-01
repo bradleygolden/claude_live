@@ -82,7 +82,7 @@ defmodule ClaudeLive.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build", "terminal.setup"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ash.setup --quiet", "test"],
@@ -93,7 +93,8 @@ defmodule ClaudeLive.MixProject do
         "esbuild claude_live --minify",
         "phx.digest"
       ],
-      "ash.setup": ["ash.setup", "run priv/repo/seeds.exs"]
+      "ash.setup": ["ash.setup", "run priv/repo/seeds.exs"],
+      "terminal.setup": ["cmd --cd priv/terminal npm install"]
     ]
   end
 end
