@@ -1122,11 +1122,12 @@ defmodule ClaudeLiveWeb.DashboardLive do
     case System.cmd("zed", [path], stderr_to_stdout: true) do
       {_output, 0} ->
         {:noreply, put_flash(socket, :info, "Opening in Zed...")}
-      
+
       {_output, _status} ->
         # Fallback to using the zed:// URL scheme if available
         zed_url = "zed://file/#{URI.encode(path)}"
-        {:noreply, 
+
+        {:noreply,
          socket
          |> push_event("open-url", %{url: zed_url})
          |> put_flash(:info, "Opening in Zed...")}
@@ -1137,15 +1138,16 @@ defmodule ClaudeLiveWeb.DashboardLive do
     case Ash.destroy(Ash.get!(ClaudeLive.Claude.Repository, repo_id)) do
       :ok ->
         repositories = Ash.read!(ClaudeLive.Claude.Repository)
-        
+
         # If the removed repository was selected, clear the selection
-        selected_repository = 
-          if socket.assigns.selected_repository && socket.assigns.selected_repository.id == repo_id do
+        selected_repository =
+          if socket.assigns.selected_repository &&
+               socket.assigns.selected_repository.id == repo_id do
             nil
           else
             socket.assigns.selected_repository
           end
-        
+
         {:noreply,
          socket
          |> assign(:repositories, repositories)
@@ -1153,7 +1155,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
          |> assign(:worktrees, [])
          |> push_navigate(to: ~p"/dashboard")
          |> put_flash(:info, "Repository removed successfully")}
-      
+
       {:error, _error} ->
         {:noreply, put_flash(socket, :error, "Failed to remove repository")}
     end

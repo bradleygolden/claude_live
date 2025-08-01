@@ -7,7 +7,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, load: :repository)
     # Use worktree ID as session ID for persistence
     session_id = "terminal-#{worktree_id}"
-    
+
     socket =
       socket
       |> assign(:session_id, session_id)
@@ -16,19 +16,19 @@ defmodule ClaudeLiveWeb.TerminalLive do
       |> assign(:worktree, worktree)
       |> assign(:page_title, "Terminal - #{worktree.branch}")
       |> assign(:existing_session, ClaudeLive.Terminal.PtyServer.exists?(session_id))
-    
+
     {:ok, socket}
   end
 
   @impl true
   def handle_event("connect", %{"cols" => cols, "rows" => rows}, socket) do
     session_id = socket.assigns.session_id
-    
+
     # Check if session already exists
     if ClaudeLive.Terminal.PtyServer.exists?(session_id) do
       # Reuse existing session
       ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
-      
+
       # Get and replay buffer
       case ClaudeLive.Terminal.PtyServer.get_buffer(session_id) do
         {:ok, buffer} ->
@@ -36,27 +36,30 @@ defmodule ClaudeLiveWeb.TerminalLive do
           Enum.each(buffer, fn data ->
             send(self(), {ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}})
           end)
-        _ -> :ok
+
+        _ ->
+          :ok
       end
-      
+
       # Resize to new dimensions
       ClaudeLive.Terminal.PtyServer.resize(session_id, cols, rows)
     else
       # Start new terminal server
       {:ok, _pid} = ClaudeLive.Terminal.Supervisor.start_terminal(session_id)
-      
+
       # Subscribe to terminal events
       ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
-      
+
       # Spawn shell in worktree directory
-      :ok = ClaudeLive.Terminal.PtyServer.spawn_shell(session_id,
-        cols: cols,
-        rows: rows,
-        shell: System.get_env("SHELL", "/bin/bash"),
-        cwd: socket.assigns.worktree.path
-      )
+      :ok =
+        ClaudeLive.Terminal.PtyServer.spawn_shell(session_id,
+          cols: cols,
+          rows: rows,
+          shell: System.get_env("SHELL", "/bin/bash"),
+          cwd: socket.assigns.worktree.path
+        )
     end
-    
+
     {:noreply, assign(socket, :connected, true)}
   end
 
@@ -65,7 +68,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if socket.assigns.connected do
       ClaudeLive.Terminal.PtyServer.write(socket.assigns.session_id, data)
     end
-    
+
     {:noreply, socket}
   end
 
@@ -74,7 +77,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if socket.assigns.connected do
       ClaudeLive.Terminal.PtyServer.resize(socket.assigns.session_id, cols, rows)
     end
-    
+
     {:noreply, socket}
   end
 
@@ -83,7 +86,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if socket.assigns.connected do
       ClaudeLive.Terminal.Supervisor.stop_terminal(socket.assigns.session_id)
     end
-    
+
     {:noreply, assign(socket, :connected, false)}
   end
 
@@ -93,13 +96,21 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
-  def handle_info({ClaudeLive.Terminal.PtyServer, _session_id, {:terminal_exit, exit_code}}, socket) do
+  def handle_info(
+        {ClaudeLive.Terminal.PtyServer, _session_id, {:terminal_exit, exit_code}},
+        socket
+      ) do
     Logger.info("Terminal exited with code: #{exit_code}")
-    {:noreply, assign(socket, :connected, false) |> push_event("terminal_exit", %{code: exit_code})}
+
+    {:noreply,
+     assign(socket, :connected, false) |> push_event("terminal_exit", %{code: exit_code})}
   end
 
   @impl true
-  def handle_info({ClaudeLive.Terminal.PtyServer, _session_id, {:terminal_closed, _status}}, socket) do
+  def handle_info(
+        {ClaudeLive.Terminal.PtyServer, _session_id, {:terminal_closed, _status}},
+        socket
+      ) do
     {:noreply, assign(socket, :connected, false) |> push_event("terminal_closed", %{})}
   end
 
@@ -109,7 +120,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if socket.assigns[:connected] && socket.assigns[:session_id] do
       ClaudeLive.Terminal.PtyServer.unsubscribe(socket.assigns.session_id, self())
     end
-    
+
     :ok
   end
 
@@ -138,15 +149,16 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <div class="flex items-center space-x-2">
                 <span class={[
                   "inline-block w-3 h-3 rounded-full",
-                  @connected && "bg-green-500" || "bg-red-500"
-                ]}></span>
+                  (@connected && "bg-green-500") || "bg-red-500"
+                ]}>
+                </span>
                 <span class="text-sm text-gray-300">
-                  <%= if @connected, do: "Connected", else: "Disconnected" %>
+                  {if @connected, do: "Connected", else: "Disconnected"}
                 </span>
               </div>
             </div>
           </div>
-          
+
           <div
             id="terminal-container"
             phx-hook="TerminalHook"
@@ -156,7 +168,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
             <div id="terminal" class="h-full w-full"></div>
           </div>
         </div>
-        
+
         <div class="mt-4 flex justify-between">
           <.link
             navigate={~p"/dashboard/#{@worktree.repository_id}"}
@@ -165,9 +177,9 @@ defmodule ClaudeLiveWeb.TerminalLive do
             ← Back to Dashboard
           </.link>
           <button
+            :if={@connected}
             phx-click="disconnect"
             class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
-            :if={@connected}
           >
             Disconnect
           </button>

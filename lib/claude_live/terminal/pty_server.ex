@@ -51,22 +51,24 @@ defmodule ClaudeLive.Terminal.PtyServer do
   @impl true
   def init(opts) do
     session_id = Keyword.fetch!(opts, :session_id)
-    
-    port = Port.open({:spawn_executable, node_path()}, [
-      :binary,
-      :exit_status,
-      line: 65536,
-      args: [@node_script]
-    ])
-    
+
+    port =
+      Port.open({:spawn_executable, node_path()}, [
+        :binary,
+        :exit_status,
+        line: 65536,
+        args: [@node_script]
+      ])
+
     state = %__MODULE__{
       port: port,
       session_id: session_id,
       subscribers: MapSet.new(),
       output_buffer: [],
-      max_buffer_size: 10_000  # Store last 10k lines
+      # Store last 10k lines
+      max_buffer_size: 10_000
     }
-    
+
     {:ok, state}
   end
 
@@ -80,7 +82,7 @@ defmodule ClaudeLive.Terminal.PtyServer do
       cwd: opts[:cwd],
       env: opts[:env] || %{}
     }
-    
+
     send_command(state.port, command)
     {:reply, :ok, state}
   end
@@ -103,7 +105,7 @@ defmodule ClaudeLive.Terminal.PtyServer do
       type: "write",
       data: Base.encode64(data)
     }
-    
+
     send_command(state.port, command)
     {:noreply, state}
   end
@@ -115,7 +117,7 @@ defmodule ClaudeLive.Terminal.PtyServer do
       cols: cols,
       rows: rows
     }
-    
+
     send_command(state.port, command)
     {:noreply, state}
   end
@@ -128,28 +130,29 @@ defmodule ClaudeLive.Terminal.PtyServer do
 
   @impl true
   def handle_info({port, {:data, {:eol, line}}}, %{port: port} = state) do
-    state = case Jason.decode(line) do
-      {:ok, %{"type" => "data", "data" => data}} ->
-        decoded = Base.decode64!(data)
-        broadcast_to_subscribers(state, {:terminal_data, decoded})
-        
-        # Store in buffer
-        new_buffer = add_to_buffer(state.output_buffer, decoded, state.max_buffer_size)
-        %{state | output_buffer: new_buffer}
-        
-      {:ok, %{"type" => "exit", "exitCode" => exit_code}} ->
-        broadcast_to_subscribers(state, {:terminal_exit, exit_code})
-        state
-        
-      {:ok, %{"type" => "spawned", "pid" => pid}} ->
-        Logger.debug("Terminal spawned with PID: #{pid}")
-        state
-        
-      {:error, _} ->
-        Logger.error("Failed to decode message from terminal: #{line}")
-        state
-    end
-    
+    state =
+      case Jason.decode(line) do
+        {:ok, %{"type" => "data", "data" => data}} ->
+          decoded = Base.decode64!(data)
+          broadcast_to_subscribers(state, {:terminal_data, decoded})
+
+          # Store in buffer
+          new_buffer = add_to_buffer(state.output_buffer, decoded, state.max_buffer_size)
+          %{state | output_buffer: new_buffer}
+
+        {:ok, %{"type" => "exit", "exitCode" => exit_code}} ->
+          broadcast_to_subscribers(state, {:terminal_exit, exit_code})
+          state
+
+        {:ok, %{"type" => "spawned", "pid" => pid}} ->
+          Logger.debug("Terminal spawned with PID: #{pid}")
+          state
+
+        {:error, _} ->
+          Logger.error("Failed to decode message from terminal: #{line}")
+          state
+      end
+
     {:noreply, state}
   end
 
@@ -172,6 +175,7 @@ defmodule ClaudeLive.Terminal.PtyServer do
       send_command(state.port, %{type: "kill"})
       Port.close(state.port)
     end
+
     :ok
   end
 
@@ -198,6 +202,7 @@ defmodule ClaudeLive.Terminal.PtyServer do
 
   defp add_to_buffer(buffer, data, max_size) do
     new_buffer = buffer ++ [data]
+
     if length(new_buffer) > max_size do
       Enum.drop(new_buffer, length(new_buffer) - max_size)
     else

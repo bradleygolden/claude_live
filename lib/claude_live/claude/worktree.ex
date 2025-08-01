@@ -72,7 +72,7 @@ defmodule ClaudeLive.Claude.Worktree do
             repository = Ash.load!(worktree, :repository, authorize?: false).repository
 
             case remove_git_worktree(worktree.path, repository.path) do
-              {:ok, _} ->
+              :ok ->
                 changeset
 
               {:error, reason} ->
@@ -87,15 +87,24 @@ defmodule ClaudeLive.Claude.Worktree do
   end
 
   defp create_git_worktree(branch, repository_path) do
-    worktree_name = "claude-#{branch}-#{:os.system_time(:second)}"
+    repo_name = Path.basename(repository_path)
+
+    sanitized_branch = String.replace(branch, ~r/[^a-zA-Z0-9_-]/, "-")
+    worktree_name = "#{sanitized_branch}-#{:os.system_time(:second)}"
+
+    claude_live_path =
+      Path.join([System.user_home!(), "Development", "bradleygolden", "claude_live"])
 
     worktree_path =
       Path.join([
-        repository_path,
-        "..",
-        "#{Path.basename(repository_path)}-worktrees",
+        claude_live_path,
+        "repo",
+        repo_name,
         worktree_name
       ])
+
+    worktree_parent = Path.dirname(worktree_path)
+    File.mkdir_p!(worktree_parent)
 
     cmd = "git"
     args = ["worktree", "add", "-b", branch, worktree_path]
@@ -115,7 +124,7 @@ defmodule ClaudeLive.Claude.Worktree do
 
     case System.cmd(cmd, args, cd: repository_path, stderr_to_stdout: true) do
       {_output, 0} ->
-        {:ok, :removed}
+        :ok
 
       {output, _status} ->
         {:error, output}

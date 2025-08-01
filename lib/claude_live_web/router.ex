@@ -25,7 +25,7 @@ defmodule ClaudeLiveWeb.Router do
 
     # Directory Browser
     live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
-    
+
     # Terminal
     live "/terminal/:worktree_id", TerminalLive, :index
   end
