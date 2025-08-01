@@ -11,6 +11,11 @@ defmodule ClaudeLive.Application do
       ClaudeLiveWeb.Telemetry,
       ClaudeLive.Repo,
       {DNSCluster, query: Application.get_env(:claude_live, :dns_cluster_query) || :ignore},
+      {Oban,
+       AshOban.config(
+         Application.fetch_env!(:claude_live, :ash_domains),
+         Application.fetch_env!(:claude_live, Oban)
+       )},
       {Phoenix.PubSub, name: ClaudeLive.PubSub},
       # Start a worker by calling: ClaudeLive.Worker.start_link(arg)
       # {ClaudeLive.Worker, arg},

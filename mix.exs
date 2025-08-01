@@ -34,6 +34,8 @@ defmodule ClaudeLive.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:oban, "~> 2.0"},
+      {:ash_oban, "~> 0.4"},
       {:usage_rules, "~> 0.1", only: [:dev]},
       {:claude, "~> 0.2", only: [:dev], runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]},

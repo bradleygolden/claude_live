@@ -7,6 +7,15 @@
 # General application configuration
 import Config
 
+config :ash_oban, pro?: false
+
+config :claude_live, Oban,
+  engine: Oban.Engines.Lite,
+  notifier: Oban.Notifiers.PG,
+  queues: [default: 10],
+  repo: ClaudeLive.Repo,
+  plugins: [{Oban.Plugins.Cron, []}]
+
 config :claude_live,
   ecto_repos: [ClaudeLive.Repo],
   generators: [timestamp_type: :utc_datetime],
