@@ -32,24 +32,48 @@ rl.on('line', (line) => {
         });
         
         ptyProcess.onData(data => {
-          process.stdout.write(JSON.stringify({
-            type: 'data',
-            data: Buffer.from(data).toString('base64')
-          }) + '\n');
+          try {
+            process.stdout.write(JSON.stringify({
+              type: 'data',
+              data: Buffer.from(data).toString('base64')
+            }) + '\n');
+          } catch (err) {
+            if (err.code === 'EPIPE') {
+              process.exit(0);
+            } else {
+              throw err;
+            }
+          }
         });
         
         ptyProcess.onExit(({ exitCode, signal }) => {
-          process.stdout.write(JSON.stringify({
-            type: 'exit',
-            exitCode,
-            signal
-          }) + '\n');
+          try {
+            process.stdout.write(JSON.stringify({
+              type: 'exit',
+              exitCode,
+              signal
+            }) + '\n');
+          } catch (err) {
+            if (err.code === 'EPIPE') {
+              process.exit(0);
+            } else {
+              throw err;
+            }
+          }
         });
         
-        process.stdout.write(JSON.stringify({
-          type: 'spawned',
-          pid: ptyProcess.pid
-        }) + '\n');
+        try {
+          process.stdout.write(JSON.stringify({
+            type: 'spawned',
+            pid: ptyProcess.pid
+          }) + '\n');
+        } catch (err) {
+          if (err.code === 'EPIPE') {
+            process.exit(0);
+          } else {
+            throw err;
+          }
+        }
         break;
         
       case 'write':
@@ -74,6 +98,30 @@ rl.on('line', (line) => {
   } catch (e) {
     process.stderr.write(`Error: ${e.message}\n`);
   }
+});
+
+// Handle broken pipe errors
+process.stdout.on('error', (err) => {
+  if (err.code === 'EPIPE') {
+    process.exit(0);
+  } else {
+    throw err;
+  }
+});
+
+// Handle process termination signals
+process.on('SIGTERM', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+  process.exit(0);
 });
 
 // Clean up on exit
