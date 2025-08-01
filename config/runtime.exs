@@ -20,6 +20,10 @@ if System.get_env("PHX_SERVER") do
   config :claude_live, ClaudeLiveWeb.Endpoint, server: true
 end
 
+if database_path = System.get_env("CLAUDE_LIVE_DATABASE_PATH") do
+  config :claude_live, ClaudeLive.Repo, database: database_path
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

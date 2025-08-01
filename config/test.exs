@@ -2,16 +2,13 @@ import Config
 config :claude_live, Oban, testing: :manual
 config :ash, disable_async?: true
 
-# Configure your database
-#
-# The MIX_TEST_PARTITION environment variable can be used
-# to provide built-in test partitioning in CI environment.
-# Run `mix help test` for more information.
+Code.require_file("helpers.exs", __DIR__)
+
+partition = System.get_env("MIX_TEST_PARTITION") || ""
+test_db_name = if partition == "", do: "test", else: "test#{partition}"
+
 config :claude_live, ClaudeLive.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  database: "claude_live_test#{System.get_env("MIX_TEST_PARTITION")}",
+  database: ClaudeLive.Config.Helpers.database_path(test_db_name),
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
