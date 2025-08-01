@@ -138,7 +138,7 @@ defmodule ClaudeLiveWeb.DirectoryBrowserLive do
   end
 
   def handle_event("cancel", _params, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/dashboard")}
+    {:noreply, push_navigate(socket, to: ~p"/")}
   end
 
   defp load_directory_contents(socket) do
