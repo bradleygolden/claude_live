@@ -227,4 +227,10 @@ _A declarative, extensible framework for building Elixir applications._
 
 [ash usage rules](deps/ash/usage-rules.md)
 <!-- ash-end -->
+<!-- ash_oban-start -->
+## ash_oban usage
+_The extension for integrating Ash resources with Oban._
+
+[ash_oban usage rules](deps/ash_oban/usage-rules.md)
+<!-- ash_oban-end -->
 <!-- usage-rules-end -->
