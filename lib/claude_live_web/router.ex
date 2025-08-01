@@ -17,10 +17,8 @@ defmodule ClaudeLiveWeb.Router do
   scope "/", ClaudeLiveWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
-
-    # Dashboard
-    live "/dashboard", DashboardLive, :index
+    # Dashboard (now the default route)
+    live "/", DashboardLive, :index
     live "/dashboard/:repo_id", DashboardLive, :show
 
     # Directory Browser

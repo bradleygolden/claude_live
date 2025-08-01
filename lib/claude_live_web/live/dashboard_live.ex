@@ -1153,7 +1153,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
          |> assign(:repositories, repositories)
          |> assign(:selected_repository, selected_repository)
          |> assign(:worktrees, [])
-         |> push_navigate(to: ~p"/dashboard")
+         |> push_navigate(to: ~p"/")
          |> put_flash(:info, "Repository removed successfully")}
 
       {:error, _error} ->
