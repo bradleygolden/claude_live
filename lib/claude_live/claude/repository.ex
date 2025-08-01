@@ -1,4 +1,4 @@
-defmodule ClaudeLive.Claude.Project do
+defmodule ClaudeLive.Claude.Repository do
   use Ash.Resource,
     otp_app: :claude_live,
     domain: ClaudeLive.Claude,
@@ -29,7 +29,7 @@ defmodule ClaudeLive.Claude.Project do
   end
 
   sqlite do
-    table "projects"
+    table "repositories"
     repo ClaudeLive.Repo
   end
 end

@@ -21,7 +21,7 @@ defmodule ClaudeLive.Claude.Worktree do
   end
 
   relationships do
-    belongs_to :project, ClaudeLive.Claude.Project do
+    belongs_to :repository, ClaudeLive.Claude.Repository do
       allow_nil? false
       attribute_type :uuid
     end
@@ -34,14 +34,14 @@ defmodule ClaudeLive.Claude.Worktree do
 
     create :create do
       primary? true
-      accept [:branch, :project_id]
+      accept [:branch, :repository_id]
       
       change fn changeset, _context ->
         changeset
         |> Ash.Changeset.after_action(fn changeset, worktree ->
-          project = Ash.load!(worktree, :project, authorize?: false).project
+          repository = Ash.load!(worktree, :repository, authorize?: false).repository
           
-          case create_git_worktree(worktree.branch, project.path) do
+          case create_git_worktree(worktree.branch, repository.path) do
             {:ok, worktree_path} ->
               # Update the worktree with the path
               worktree
@@ -65,9 +65,9 @@ defmodule ClaudeLive.Claude.Worktree do
           worktree = changeset.data
           
           if worktree.path && File.exists?(worktree.path) do
-            project = Ash.load!(worktree, :project, authorize?: false).project
+            repository = Ash.load!(worktree, :repository, authorize?: false).repository
             
-            case remove_git_worktree(worktree.path, project.path) do
+            case remove_git_worktree(worktree.path, repository.path) do
               {:ok, _} -> changeset
               {:error, reason} -> 
                 Ash.Changeset.add_error(changeset, error: reason)
@@ -80,14 +80,14 @@ defmodule ClaudeLive.Claude.Worktree do
     end
   end
 
-  defp create_git_worktree(branch, project_path) do
+  defp create_git_worktree(branch, repository_path) do
     worktree_name = "claude-#{branch}-#{:os.system_time(:second)}"
-    worktree_path = Path.join([project_path, "..", "#{Path.basename(project_path)}-worktrees", worktree_name])
+    worktree_path = Path.join([repository_path, "..", "#{Path.basename(repository_path)}-worktrees", worktree_name])
 
     cmd = "git"
     args = ["worktree", "add", "-b", branch, worktree_path]
 
-    case System.cmd(cmd, args, cd: project_path, stderr_to_stdout: true) do
+    case System.cmd(cmd, args, cd: repository_path, stderr_to_stdout: true) do
       {_output, 0} ->
         {:ok, worktree_path}
       
@@ -96,11 +96,11 @@ defmodule ClaudeLive.Claude.Worktree do
     end
   end
 
-  defp remove_git_worktree(worktree_path, project_path) do
+  defp remove_git_worktree(worktree_path, repository_path) do
     cmd = "git"
     args = ["worktree", "remove", worktree_path, "--force"]
 
-    case System.cmd(cmd, args, cd: project_path, stderr_to_stdout: true) do
+    case System.cmd(cmd, args, cd: repository_path, stderr_to_stdout: true) do
       {_output, 0} ->
         {:ok, :removed}
       

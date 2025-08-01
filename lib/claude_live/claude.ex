@@ -3,7 +3,7 @@ defmodule ClaudeLive.Claude do
     otp_app: :claude_live
 
   resources do
-    resource ClaudeLive.Claude.Project
+    resource ClaudeLive.Claude.Repository
     resource ClaudeLive.Claude.Worktree
     resource ClaudeLive.Claude.Session
   end
