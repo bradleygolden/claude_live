@@ -18,6 +18,13 @@ defmodule ClaudeLiveWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    # Repository routes
+    live "/repos", RepositoryLive.Index, :index
+    live "/repos/new", RepositoryLive.Form, :new
+    live "/repos/:id/edit", RepositoryLive.Form, :edit
+    live "/repos/:id", RepositoryLive.Show, :show
+    live "/repos/:id/show/edit", RepositoryLive.Show, :edit
   end
 
   # Other scopes may use custom stacks.
