@@ -88,9 +88,14 @@ defmodule ClaudeLive.MixProject do
       test: ["ash.setup --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind claude_live", "esbuild claude_live"],
+      "assets.vendor": [
+        "cmd mkdir -p priv/static/assets/vendor",
+        "cmd cp -r assets/vendor/* priv/static/assets/vendor/"
+      ],
       "assets.deploy": [
         "tailwind claude_live --minify",
         "esbuild claude_live --minify",
+        "assets.vendor",
         "phx.digest"
       ],
       "ash.setup": ["ash.setup", "run priv/repo/seeds.exs"],

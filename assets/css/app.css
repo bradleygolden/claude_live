@@ -2,7 +2,6 @@
    https://tailwindcss.com/docs/configuration */
 
 @import "tailwindcss" source(none);
-@import "../vendor/xterm.css";
 @source "../css";
 @source "../js";
 @source "../../lib/claude_live_web";

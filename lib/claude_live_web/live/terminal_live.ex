@@ -127,6 +127,113 @@ defmodule ClaudeLiveWeb.TerminalLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".TerminalHook">
+      export default {
+        mounted() {
+          const Terminal = window.Terminal;
+          const FitAddon = window.FitAddon?.FitAddon || window.FitAddon;
+          const WebLinksAddon = window.WebLinksAddon?.WebLinksAddon || window.WebLinksAddon;
+          
+          if (!Terminal) {
+            console.error("Terminal is not defined. Make sure xterm.js is loaded properly.");
+            return;
+          }
+          
+          this._initTerminal(Terminal, FitAddon, WebLinksAddon);
+        },
+        
+        _initTerminal(Terminal, FitAddon, WebLinksAddon) {
+          this.terminal = new Terminal({
+            cursorBlink: true,
+            fontSize: 14,
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            theme: {
+              background: '#1a1a1a',
+              foreground: '#d4d4d4',
+              cursor: '#d4d4d4',
+              black: '#000000',
+              red: '#cd3131',
+              green: '#0dbc79',
+              yellow: '#e5e510',
+              blue: '#2472c8',
+              magenta: '#bc3fbc',
+              cyan: '#11a8cd',
+              white: '#e5e5e5',
+              brightBlack: '#666666',
+              brightRed: '#f14c4c',
+              brightGreen: '#23d18b',
+              brightYellow: '#f5f543',
+              brightBlue: '#3b8eea',
+              brightMagenta: '#d670d6',
+              brightCyan: '#29b8db',
+              brightWhite: '#e5e5e5'
+            }
+          });
+
+          // Add addons
+          this.fitAddon = new FitAddon();
+          this.terminal.loadAddon(this.fitAddon);
+          this.terminal.loadAddon(new WebLinksAddon());
+
+          const terminalElement = document.getElementById('terminal');
+          
+          if (!terminalElement) {
+            console.error("Terminal element not found!");
+            return;
+          }
+          
+          this.terminal.open(terminalElement);
+          this.fitAddon.fit();
+          
+          setTimeout(() => {
+            this.terminal.focus();
+          }, 100);
+          
+          this.el.addEventListener('click', () => {
+            this.terminal.focus();
+          });
+
+          const cols = this.terminal.cols;
+          const rows = this.terminal.rows;
+
+          this.pushEvent("connect", { cols, rows });
+
+          this.terminal.onData(data => {
+            this.pushEvent("input", { data });
+          });
+
+          this.resizeObserver = new ResizeObserver(() => {
+            this.fitAddon.fit();
+            const cols = this.terminal.cols;
+            const rows = this.terminal.rows;
+            this.pushEvent("resize", { cols, rows });
+          });
+          this.resizeObserver.observe(this.el);
+
+          this.handleEvent("terminal_output", ({ data }) => {
+            this.terminal.write(data);
+          });
+
+          this.handleEvent("terminal_exit", ({ code }) => {
+            this.terminal.write(`\\r\\n[Process exited with code ${code}]\\r\\n`);
+          });
+
+          this.handleEvent("terminal_closed", () => {
+            this.terminal.write('\\r\\n[Terminal closed]\\r\\n');
+          });
+        },
+
+        destroyed() {
+          if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+          }
+          if (this.terminal) {
+            this.terminal.dispose();
+          }
+        }
+      }
+    </script>
+
     <div class="min-h-screen bg-gray-900 p-4">
       <div class="max-w-6xl mx-auto">
         <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
@@ -161,7 +268,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
           <div
             id="terminal-container"
-            phx-hook="TerminalHook"
+            phx-hook=".TerminalHook"
             phx-update="ignore"
             class="h-[600px] w-full"
           >
