@@ -1,5 +1,4 @@
 defmodule ClaudeLive.Repo do
-  use Ecto.Repo,
-    otp_app: :claude_live,
-    adapter: Ecto.Adapters.Postgres
+  use AshSqlite.Repo,
+    otp_app: :claude_live
 end
