@@ -17,6 +17,9 @@ defmodule ClaudeLive.Application do
          Application.fetch_env!(:claude_live, Oban)
        )},
       {Phoenix.PubSub, name: ClaudeLive.PubSub},
+      # Terminal infrastructure
+      {Registry, keys: :unique, name: ClaudeLive.Terminal.Registry},
+      ClaudeLive.Terminal.Supervisor,
       # Start a worker by calling: ClaudeLive.Worker.start_link(arg)
       # {ClaudeLive.Worker, arg},
       # Start to serve requests, typically the last entry

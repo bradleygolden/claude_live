@@ -1,0 +1,9 @@
+{
+  "name": "claude-live-terminal",
+  "version": "1.0.0",
+  "description": "Terminal emulator bridge for Claude Live",
+  "private": true,
+  "dependencies": {
+    "node-pty": "^1.0.0"
+  }
+}
