@@ -14,7 +14,7 @@
       "default": "nil",
       "size": null,
       "type": "text",
-      "source": "name",
+      "source": "branch",
       "references": null,
       "allow_nil?": false,
       "generated?": false,
@@ -26,7 +26,7 @@
       "type": "text",
       "source": "path",
       "references": null,
-      "allow_nil?": false,
+      "allow_nil?": true,
       "generated?": false,
       "primary_key?": false
     },
@@ -49,20 +49,55 @@
       "allow_nil?": false,
       "generated?": false,
       "primary_key?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "uuid",
+      "source": "repository_id",
+      "references": {
+        "name": "worktrees_repository_id_fkey",
+        "table": "repositories",
+        "destination_attribute": "id",
+        "on_delete": null,
+        "primary_key?": true,
+        "multitenancy": {
+          "global": null,
+          "strategy": null,
+          "attribute": null
+        },
+        "on_update": null,
+        "deferrable": false,
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null
+      },
+      "allow_nil?": false,
+      "generated?": false,
+      "primary_key?": false
     }
   ],
-  "table": "projects",
-  "hash": "C3AF2C4C91D04E140650170DC7A192825CC4EC91399A3E9B31366C209D841F61",
+  "table": "worktrees",
+  "hash": "D352AF4232B4E3966231A336F86B4F182DB5A7BB2081073EB22EC9E0C364408F",
   "repo": "Elixir.ClaudeLive.Repo",
   "strict?": false,
-  "identities": [],
-  "multitenancy": {
-    "global": null,
-    "attribute": null,
-    "strategy": null
-  },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
+  "identities": [
+    {
+      "name": "unique_branch_per_repository",
+      "keys": [
+        "repository_id",
+        "branch"
+      ],
+      "base_filter": null,
+      "index_name": "worktrees_unique_branch_per_repository_index"
+    }
+  ],
+  "multitenancy": {
+    "global": null,
+    "strategy": null,
+    "attribute": null
+  },
+  "base_filter": null,
   "has_create_action": true
 }

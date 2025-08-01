@@ -19,12 +19,12 @@ defmodule ClaudeLiveWeb.Router do
 
     get "/", PageController, :home
 
-    # Repository routes
-    live "/repos", RepositoryLive.Index, :index
-    live "/repos/new", RepositoryLive.Form, :new
-    live "/repos/:id/edit", RepositoryLive.Form, :edit
-    live "/repos/:id", RepositoryLive.Show, :show
-    live "/repos/:id/show/edit", RepositoryLive.Show, :edit
+    # Dashboard
+    live "/dashboard", DashboardLive, :index
+    live "/dashboard/:repo_id", DashboardLive, :show
+
+    # Directory Browser
+    live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
   end
 
   # Other scopes may use custom stacks.
