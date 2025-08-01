@@ -9,7 +9,8 @@ import Config
 
 config :claude_live,
   ecto_repos: [ClaudeLive.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  ash_domains: [ClaudeLive.Claude]
 
 # Configures the endpoint
 config :claude_live, ClaudeLiveWeb.Endpoint,

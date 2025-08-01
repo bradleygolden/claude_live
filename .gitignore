@@ -35,3 +35,7 @@ claude_live-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# sqlite
+claude_live_dev
+claude_live_dev-shm
+claude_live_dev-wal
