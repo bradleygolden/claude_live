@@ -3,13 +3,15 @@
 # This script is called with JSON input via stdin from Claude Code
 
 # Install dependencies
-Mix.install([{:claude, "~> 0.2.3"}, {:jason, "~> 1.4"}, {:igniter, "~> 0.6"}])
+Mix.install([{:claude, "~> 0.2.4"}, {:jason, "~> 1.4"}, {:igniter, "~> 0.6"}])
 
 # Read JSON from stdin
 input = IO.read(:stdio, :eof)
 
-# Reuse the existing hook module
-case Claude.Hooks.PostToolUse.ElixirFormatter.run(input) do
-  :ok -> System.halt(0)
-  _ -> System.halt(1)
-end
+# Run the hook module
+# The hook now handles JSON output internally using JsonOutput.write_and_exit/1
+# which will output JSON and exit with code 0
+Claude.Hooks.PostToolUse.ElixirFormatter.run(input)
+
+# If we reach here, the hook didn't exit properly, so we exit with success
+System.halt(0)
