@@ -234,10 +234,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
       }
     </script>
 
-    <div class="min-h-screen bg-gray-900 p-4">
-      <div class="max-w-6xl mx-auto">
-        <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden">
-          <div class="bg-gray-700 px-4 py-2 flex items-center justify-between">
+    <div class="h-screen bg-gray-900 flex flex-col">
+      <div class="flex-1 flex flex-col p-2">
+        <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden flex-1 flex flex-col">
+          <div class="bg-gray-700 px-4 py-2 flex items-center justify-between flex-shrink-0">
             <div class="flex items-center space-x-3">
               <h2 class="text-white font-semibold">Terminal</h2>
               <span class="text-sm text-gray-400">
@@ -270,13 +270,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
             id="terminal-container"
             phx-hook=".TerminalHook"
             phx-update="ignore"
-            class="h-[600px] w-full"
+            class="flex-1 w-full"
           >
             <div id="terminal" class="h-full w-full"></div>
           </div>
         </div>
 
-        <div class="mt-4 flex justify-between">
+        <div class="mt-2 flex justify-between flex-shrink-0">
           <.link
             navigate={~p"/dashboard/#{@worktree.repository_id}"}
             class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition"

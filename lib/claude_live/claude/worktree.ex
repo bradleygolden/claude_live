@@ -43,7 +43,8 @@ defmodule ClaudeLive.Claude.Worktree do
 
           case create_git_worktree(worktree.branch, repository.path) do
             {:ok, worktree_path} ->
-              # Update the worktree with the path
+              ClaudeLive.WorktreeDatabase.setup_worktree_database(worktree_path)
+
               updated_worktree =
                 worktree
                 |> Ash.Changeset.for_update(:update, %{path: worktree_path})
@@ -52,7 +53,6 @@ defmodule ClaudeLive.Claude.Worktree do
               {:ok, updated_worktree}
 
             {:error, reason} ->
-              # Return error which will rollback the transaction
               {:error, Ash.Error.Unknown.exception(message: reason)}
           end
         end)
