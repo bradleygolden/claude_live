@@ -172,8 +172,21 @@ defmodule ClaudeLive.Terminal.PtyServer do
   @impl true
   def terminate(_reason, state) do
     if state.port do
-      send_command(state.port, %{type: "kill"})
-      Port.close(state.port)
+      port_info = Port.info(state.port)
+
+      if port_info do
+        try do
+          send_command(state.port, %{type: "kill"})
+        rescue
+          ArgumentError -> :ok
+        end
+
+        try do
+          Port.close(state.port)
+        rescue
+          _ -> :ok
+        end
+      end
     end
 
     :ok
