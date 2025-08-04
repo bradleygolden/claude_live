@@ -87,34 +87,68 @@ defmodule ClaudeLive.Claude.Worktree do
   end
 
   defp create_git_worktree(branch, repository_path) do
-    repo_name = Path.basename(repository_path)
+    with {_output, 0} <-
+           System.cmd("git", ["fetch", "origin"], cd: repository_path, stderr_to_stdout: true) do
+      repo_name = Path.basename(repository_path)
 
-    sanitized_branch = String.replace(branch, ~r/[^a-zA-Z0-9_-]/, "-")
-    worktree_name = "#{sanitized_branch}-#{:os.system_time(:second)}"
+      sanitized_branch = String.replace(branch, ~r/[^a-zA-Z0-9_-]/, "-")
+      worktree_name = "#{sanitized_branch}-#{:os.system_time(:second)}"
 
-    claude_live_path =
-      Path.join([System.user_home!(), "Development", "bradleygolden", "claude_live"])
+      claude_live_path =
+        Path.join([System.user_home!(), "Development", "bradleygolden", "claude_live"])
 
-    worktree_path =
-      Path.join([
-        claude_live_path,
-        "repo",
-        repo_name,
-        worktree_name
-      ])
+      worktree_path =
+        Path.join([
+          claude_live_path,
+          "repo",
+          repo_name,
+          worktree_name
+        ])
 
-    worktree_parent = Path.dirname(worktree_path)
-    File.mkdir_p!(worktree_parent)
+      worktree_parent = Path.dirname(worktree_path)
+      File.mkdir_p!(worktree_parent)
 
-    cmd = "git"
-    args = ["worktree", "add", "-b", branch, worktree_path]
+      default_branch = get_default_branch(repository_path)
 
-    case System.cmd(cmd, args, cd: repository_path, stderr_to_stdout: true) do
-      {_output, 0} ->
-        {:ok, worktree_path}
+      cmd = "git"
+      args = ["worktree", "add", "-b", branch, worktree_path, "origin/#{default_branch}"]
 
+      case System.cmd(cmd, args, cd: repository_path, stderr_to_stdout: true) do
+        {_output, 0} ->
+          {:ok, worktree_path}
+
+        {output, _status} ->
+          {:error, output}
+      end
+    else
       {output, _status} ->
-        {:error, output}
+        {:error, "Failed to fetch from origin: #{output}"}
+    end
+  end
+
+  defp get_default_branch(repository_path) do
+    case System.cmd("git", ["symbolic-ref", "refs/remotes/origin/HEAD"],
+           cd: repository_path,
+           stderr_to_stdout: true
+         ) do
+      {output, 0} ->
+        output
+        |> String.trim()
+        |> String.split("/")
+        |> List.last()
+
+      _ ->
+        case System.cmd("git", ["branch", "-r"], cd: repository_path, stderr_to_stdout: true) do
+          {output, 0} ->
+            cond do
+              String.contains?(output, "origin/main") -> "main"
+              String.contains?(output, "origin/master") -> "master"
+              true -> "main"
+            end
+
+          _ ->
+            "main"
+        end
     end
   end
 
