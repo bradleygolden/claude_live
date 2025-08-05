@@ -3,7 +3,6 @@
 const pty = require('node-pty');
 const readline = require('readline');
 
-// Create readline interface for communication with Elixir
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -12,7 +11,6 @@ const rl = readline.createInterface({
 
 let ptyProcess = null;
 
-// Handle commands from Elixir
 rl.on('line', (line) => {
   try {
     const command = JSON.parse(line);
@@ -32,24 +30,48 @@ rl.on('line', (line) => {
         });
         
         ptyProcess.onData(data => {
-          process.stdout.write(JSON.stringify({
-            type: 'data',
-            data: Buffer.from(data).toString('base64')
-          }) + '\n');
+          try {
+            process.stdout.write(JSON.stringify({
+              type: 'data',
+              data: Buffer.from(data).toString('base64')
+            }) + '\n');
+          } catch (err) {
+            if (err.code === 'EPIPE') {
+              process.exit(0);
+            } else {
+              throw err;
+            }
+          }
         });
         
         ptyProcess.onExit(({ exitCode, signal }) => {
-          process.stdout.write(JSON.stringify({
-            type: 'exit',
-            exitCode,
-            signal
-          }) + '\n');
+          try {
+            process.stdout.write(JSON.stringify({
+              type: 'exit',
+              exitCode,
+              signal
+            }) + '\n');
+          } catch (err) {
+            if (err.code === 'EPIPE') {
+              process.exit(0);
+            } else {
+              throw err;
+            }
+          }
         });
         
-        process.stdout.write(JSON.stringify({
-          type: 'spawned',
-          pid: ptyProcess.pid
-        }) + '\n');
+        try {
+          process.stdout.write(JSON.stringify({
+            type: 'spawned',
+            pid: ptyProcess.pid
+          }) + '\n');
+        } catch (err) {
+          if (err.code === 'EPIPE') {
+            process.exit(0);
+          } else {
+            throw err;
+          }
+        }
         break;
         
       case 'write':
@@ -76,7 +98,28 @@ rl.on('line', (line) => {
   }
 });
 
-// Clean up on exit
+process.stdout.on('error', (err) => {
+  if (err.code === 'EPIPE') {
+    process.exit(0);
+  } else {
+    throw err;
+  }
+});
+
+process.on('SIGTERM', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+  }
+  process.exit(0);
+});
+
 process.on('exit', () => {
   if (ptyProcess) {
     ptyProcess.kill();
