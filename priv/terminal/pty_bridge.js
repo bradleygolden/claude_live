@@ -3,7 +3,6 @@
 const pty = require('node-pty');
 const readline = require('readline');
 
-// Create readline interface for communication with Elixir
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -12,7 +11,6 @@ const rl = readline.createInterface({
 
 let ptyProcess = null;
 
-// Handle commands from Elixir
 rl.on('line', (line) => {
   try {
     const command = JSON.parse(line);
@@ -100,7 +98,6 @@ rl.on('line', (line) => {
   }
 });
 
-// Handle broken pipe errors
 process.stdout.on('error', (err) => {
   if (err.code === 'EPIPE') {
     process.exit(0);
@@ -109,7 +106,6 @@ process.stdout.on('error', (err) => {
   }
 });
 
-// Handle process termination signals
 process.on('SIGTERM', () => {
   if (ptyProcess) {
     ptyProcess.kill();
@@ -124,7 +120,6 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Clean up on exit
 process.on('exit', () => {
   if (ptyProcess) {
     ptyProcess.kill();

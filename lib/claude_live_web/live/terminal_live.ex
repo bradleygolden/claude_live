@@ -5,10 +5,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
   @impl true
   def mount(%{"worktree_id" => worktree_id}, _session, socket) do
     worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, load: :repository)
-    # Use worktree ID as session ID for persistence
     session_id = "terminal-#{worktree_id}"
 
-    # Load all worktrees for the repository to show in sidebar
     repository = Ash.get!(ClaudeLive.Claude.Repository, worktree.repository_id, load: :worktrees)
     worktrees = repository.worktrees
 
@@ -30,15 +28,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
   def handle_event("connect", %{"cols" => cols, "rows" => rows}, socket) do
     session_id = socket.assigns.session_id
 
-    # Check if session already exists
     if ClaudeLive.Terminal.PtyServer.exists?(session_id) do
-      # Reuse existing session
       ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
 
-      # Get and replay buffer
       case ClaudeLive.Terminal.PtyServer.get_buffer(session_id) do
         {:ok, buffer} ->
-          # Send all buffered output to restore terminal state
           Enum.each(buffer, fn data ->
             send(self(), {ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}})
           end)
@@ -47,16 +41,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
           :ok
       end
 
-      # Resize to new dimensions
       ClaudeLive.Terminal.PtyServer.resize(session_id, cols, rows)
     else
-      # Start new terminal server
       {:ok, _pid} = ClaudeLive.Terminal.Supervisor.start_terminal(session_id)
 
-      # Subscribe to terminal events
       ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
 
-      # Spawn shell in worktree directory
       :ok =
         ClaudeLive.Terminal.PtyServer.spawn_shell(session_id,
           cols: cols,
@@ -122,7 +112,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def terminate(_reason, socket) do
-    # Just unsubscribe, don't kill the terminal
     if socket.assigns[:connected] && socket.assigns[:session_id] do
       ClaudeLive.Terminal.PtyServer.unsubscribe(socket.assigns.session_id, self())
     end
@@ -293,8 +282,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
           </.link>
         </div>
       </div>
-      
-    <!-- Main terminal area -->
+
       <div class="flex-1 flex flex-col">
         <div class="flex-1 flex flex-col p-2">
           <div class="bg-gray-800 rounded-lg shadow-xl overflow-hidden flex-1 flex flex-col">
