@@ -414,27 +414,19 @@ defmodule ClaudeLiveWeb.TerminalLive do
               </button>
             </div>
           </div>
-          <div class="flex items-center space-x-4">
-            <div class="flex items-center space-x-2">
-              <span class={[
-                "inline-block w-2 h-2 rounded-full",
-                (@terminal.connected &&
-                   "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
-              ]}>
-              </span>
-              <span class={[
-                "text-sm font-medium",
-                (@terminal.connected && "text-emerald-400") || "text-red-400"
-              ]}>
-                {if @terminal.connected, do: "Connected", else: "Disconnected"}
-              </span>
-            </div>
-            <.link
-              navigate={~p"/"}
-              class="px-4 py-1.5 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer"
-            >
-              Dashboard
-            </.link>
+          <div class="flex items-center space-x-2">
+            <span class={[
+              "inline-block w-2 h-2 rounded-full",
+              (@terminal.connected &&
+                 "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
+            ]}>
+            </span>
+            <span class={[
+              "text-sm font-medium",
+              (@terminal.connected && "text-emerald-400") || "text-red-400"
+            ]}>
+              {if @terminal.connected, do: "Connected", else: "Disconnected"}
+            </span>
           </div>
         </div>
         
