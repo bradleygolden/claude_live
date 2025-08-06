@@ -4,23 +4,41 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def mount(%{"worktree_id" => worktree_id}, _session, socket) do
-    worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, load: :repository)
-
     all_repositories = ClaudeLive.Claude.Repository |> Ash.read!(load: :worktrees)
     all_worktrees = all_repositories |> Enum.flat_map(& &1.worktrees)
 
-    current_repository = Enum.find(all_repositories, &(&1.id == worktree.repository_id))
+    case Ash.get(ClaudeLive.Claude.Worktree, worktree_id, load: :repository) do
+      {:ok, worktree} ->
+        current_repository = Enum.find(all_repositories, &(&1.id == worktree.repository_id))
 
-    socket =
-      socket
-      |> assign(:worktree, worktree)
-      |> assign(:worktrees, all_worktrees)
-      |> assign(:repositories, all_repositories)
-      |> assign(:current_repository, current_repository)
-      |> assign(:page_title, "Terminal - All Repositories")
-      |> assign(:active_terminal_id, nil)
+        socket =
+          socket
+          |> assign(:worktree, worktree)
+          |> assign(:worktrees, all_worktrees)
+          |> assign(:repositories, all_repositories)
+          |> assign(:current_repository, current_repository)
+          |> assign(:page_title, "Terminal - All Repositories")
+          |> assign(:active_terminal_id, nil)
 
-    {:ok, socket}
+        {:ok, socket}
+
+      {:error, _} ->
+        # If worktree not found, redirect to first available worktree or dashboard
+        case all_worktrees do
+          [first | _] ->
+            {:ok, push_navigate(socket, to: ~p"/terminal/#{first.id}")}
+
+          [] ->
+            # No worktrees available, redirect to dashboard  
+            case all_repositories do
+              [first_repo | _] ->
+                {:ok, push_navigate(socket, to: ~p"/dashboard/#{first_repo.id}")}
+
+              [] ->
+                {:ok, push_navigate(socket, to: ~p"/")}
+            end
+        end
+    end
   end
 
   @impl true

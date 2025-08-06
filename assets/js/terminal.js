@@ -55,7 +55,7 @@ export class TerminalManager {
       },
       allowTransparency: true,
       convertEol: true,
-      scrollback: 10000
+      scrollback: 5000
     });
 
     // Add addons
