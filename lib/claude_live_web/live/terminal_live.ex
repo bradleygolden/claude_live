@@ -1,6 +1,6 @@
-defmodule ClaudeLiveWeb.IsolatedTerminalLive do
+defmodule ClaudeLiveWeb.TerminalLive do
   @moduledoc """
-  Isolated LiveView for a single terminal instance.
+  LiveView for a single terminal instance.
   Each terminal runs at /terminal/:terminal_id providing complete isolation.
   """
   use ClaudeLiveWeb, :live_view
@@ -18,6 +18,7 @@ defmodule ClaudeLiveWeb.IsolatedTerminalLive do
         |> assign(:session_id, terminal.session_id)
         |> assign(:subscribed, false)
         |> assign(:page_title, "Terminal - #{terminal.name}")
+        |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
 
       {:ok, socket}
     else

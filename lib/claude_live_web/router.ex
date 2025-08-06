@@ -23,7 +23,7 @@ defmodule ClaudeLiveWeb.Router do
       live "/", DashboardLive, :index
       live "/dashboard/:repo_id", DashboardLive, :show
       live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
-      live "/terminals/:terminal_id", IsolatedTerminalLive, :index
+      live "/terminals/:terminal_id", TerminalLive, :index
     end
   end
 
