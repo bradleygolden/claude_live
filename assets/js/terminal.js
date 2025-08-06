@@ -7,7 +7,6 @@ export class TerminalManager {
     this.terminals = {};
     this.activeTerminalId = null;
     this.pushEvent = null;
-    this.scrollPositions = {};
   }
 
   setEventHandler(pushEventFn) {
@@ -87,13 +86,6 @@ export class TerminalManager {
         this.pushEvent('resize', { cols, rows, terminal_id: terminalId });
       }
     });
-    
-    // Track scroll position changes
-    terminal.onScroll(() => {
-      if (terminal.buffer && terminal.buffer.active) {
-        this.scrollPositions[terminalId] = terminal.buffer.active.viewportY;
-      }
-    });
 
     // Fit terminal to container
     fitAddon.fit();
@@ -129,15 +121,6 @@ export class TerminalManager {
 
   switchTerminal(terminalId, retryCount = 0) {
     console.log('switchTerminal called with:', terminalId, 'retry:', retryCount);
-    
-    // Save scroll position of current terminal before switching
-    if (this.activeTerminalId && this.terminals[this.activeTerminalId]) {
-      const currentTerminal = this.terminals[this.activeTerminalId];
-      if (currentTerminal.buffer && currentTerminal.buffer.active) {
-        this.scrollPositions[this.activeTerminalId] = currentTerminal.buffer.active.viewportY;
-        console.log('Saved scroll position for', this.activeTerminalId, ':', this.scrollPositions[this.activeTerminalId]);
-      }
-    }
     
     // Hide all terminal containers
     document.querySelectorAll('.terminal-container').forEach(el => {
@@ -184,17 +167,6 @@ export class TerminalManager {
       if (terminal.fitAddon) {
         terminal.fitAddon.fit();
       }
-      
-      // Restore scroll position if we have one saved
-      if (this.scrollPositions[terminalId] !== undefined) {
-        setTimeout(() => {
-          if (terminal.buffer && terminal.buffer.active) {
-            terminal.scrollToLine(this.scrollPositions[terminalId]);
-            console.log('Restored scroll position for', terminalId, ':', this.scrollPositions[terminalId]);
-          }
-        }, 50);
-      }
-      
       terminal.focus();
     }
 
@@ -212,9 +184,6 @@ export class TerminalManager {
       // Dispose terminal
       terminal.dispose();
       delete this.terminals[terminalId];
-      
-      // Clean up saved scroll position
-      delete this.scrollPositions[terminalId];
     }
   }
 
