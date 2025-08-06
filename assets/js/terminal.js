@@ -113,9 +113,13 @@ export class TerminalManager {
   }
 
   writeToTerminal(terminalId, data) {
-    const terminal = this.terminals[terminalId];
-    if (terminal) {
-      terminal.write(data);
+    if (this.terminals[terminalId]) {
+      const terminal = this.terminals[terminalId];
+      if (terminal && !terminal.disposed) {
+        terminal.write(data);
+      }
+    } else {
+      console.warn(`Terminal ${terminalId} not found for output`);
     }
   }
 

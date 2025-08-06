@@ -43,6 +43,13 @@ defmodule ClaudeLive.TerminalManager do
   end
 
   @doc """
+  Get a specific terminal by ID
+  """
+  def get_terminal(terminal_id) do
+    GenServer.call(__MODULE__, {:get_terminal, terminal_id})
+  end
+
+  @doc """
   Delete a terminal
   """
   def delete_terminal(terminal_id) do
@@ -84,6 +91,11 @@ defmodule ClaudeLive.TerminalManager do
       |> Map.new()
 
     {:reply, terminals, state}
+  end
+
+  @impl true
+  def handle_call({:get_terminal, terminal_id}, _from, state) do
+    {:reply, Map.get(state.terminals, terminal_id), state}
   end
 
   @impl true

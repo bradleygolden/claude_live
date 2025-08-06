@@ -26,13 +26,11 @@ import {hooks as colocatedHooks} from "phoenix-colocated/claude_live"
 import topbar from "topbar"
 import { TerminalManager } from "./terminal"
 
-// Terminal Hook
 const TerminalHook = {
   mounted() {
     this.terminalManager = new TerminalManager()
     this.terminalManager.setEventHandler(this.pushEvent.bind(this))
     
-    // Handle server events
     this.handleEvent("terminal_output", ({ data, terminal_id }) => {
       this.terminalManager.writeToTerminal(terminal_id, data)
     })
@@ -49,7 +47,6 @@ const TerminalHook = {
       this.terminalManager.switchTerminal(terminal_id)
     })
     
-    // Initialize first terminal if one exists
     const firstTerminal = this.el.querySelector('[data-terminal-id]')
     if (firstTerminal) {
       const terminalId = firstTerminal.dataset.terminalId
@@ -64,8 +61,48 @@ const TerminalHook = {
   }
 }
 
+const SingleTerminalHook = {
+  mounted() {
+    this.terminalManager = new TerminalManager()
+    this.terminalManager.setEventHandler(this.pushEvent.bind(this))
+    
+    const terminalId = this.el.dataset.terminalId
+    
+    if (!terminalId) {
+      console.error('Terminal ID not found in dataset')
+      return
+    }
+    
+    this.terminalId = terminalId
+    
+    this.handleEvent("terminal_output", ({ data }) => {
+      this.terminalManager.writeToTerminal(this.terminalId, data)
+    })
+    
+    this.handleEvent("terminal_exit", () => {
+      this.terminalManager.handleTerminalExit(this.terminalId)
+    })
+    
+    this.handleEvent("terminal_closed", () => {
+      this.terminalManager.handleTerminalClosed(this.terminalId)
+    })
+    
+    setTimeout(() => {
+      if (this.terminalId) {
+        this.terminalManager.initTerminal(this.terminalId)
+      }
+    }, 100)
+  },
+  
+  destroyed() {
+    if (this.terminalManager) {
+      this.terminalManager.destroy()
+    }
+  }
+}
+
 // Combine hooks
-const hooks = { ...colocatedHooks, TerminalHook }
+const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

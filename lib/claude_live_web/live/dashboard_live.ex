@@ -914,21 +914,31 @@ defmodule ClaudeLiveWeb.DashboardLive do
     <!-- Terminal View Navigation in Sidebar -->
         <% total_terminals = Map.values(@global_terminals) |> length() %>
         <%= if total_terminals > 0 && length(@repositories) > 0 do %>
-          <% first_worktree = @repositories |> Enum.flat_map(& &1.worktrees) |> List.first() %>
-          <%= if first_worktree do %>
-            <div class="p-4 border-t border-gray-200/50 dark:border-gray-800">
-              <.link
-                navigate={~p"/terminal/#{first_worktree.id}"}
-                class="relative w-full inline-flex items-center justify-center px-4 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                <.icon name="hero-command-line" class="w-5 h-5" />
-                <span class="ml-2">Terminal View</span>
-                <span class="absolute top-2.5 right-2.5 flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 bg-white/20 text-xs font-bold rounded-full">
-                  {total_terminals}
-                </span>
-              </.link>
+          <div class="p-4 border-t border-gray-200/50 dark:border-gray-800">
+            <h3 class="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+              Active Terminals ({total_terminals})
+            </h3>
+            <div class="space-y-2">
+              <%= for {terminal_id, terminal} <- @global_terminals do %>
+                <.link
+                  navigate={~p"/terminals/#{terminal_id}"}
+                  class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <div class="flex items-center space-x-2">
+                    <span class={[
+                      "w-2 h-2 rounded-full",
+                      (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-400"
+                    ]}>
+                    </span>
+                    <span class="text-sm text-gray-700 dark:text-gray-300">{terminal.name}</span>
+                  </div>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                    {terminal.worktree_branch}
+                  </span>
+                </.link>
+              <% end %>
             </div>
-          <% end %>
+          </div>
         <% end %>
       </div>
       
@@ -1100,7 +1110,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
                             <%= for terminal <- worktree_terminals do %>
                               <div class="group flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
                                 <.link
-                                  navigate={~p"/terminal/#{worktree.id}?terminal_id=#{terminal.id}"}
+                                  navigate={~p"/terminals/#{terminal.id}"}
                                   class="flex items-center flex-1 min-w-0 cursor-pointer"
                                 >
                                   <span class={[
@@ -1306,7 +1316,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
     {:noreply,
      socket
      |> put_flash(:info, "Terminal created. Go to Terminal view to connect.")
-     |> push_navigate(to: ~p"/terminal/#{worktree_id}?terminal_id=#{terminal_id}")}
+     |> push_navigate(to: ~p"/terminals/#{terminal_id}")}
   end
 
   def handle_event("remove-repository", %{"id" => repo_id}, socket) do
