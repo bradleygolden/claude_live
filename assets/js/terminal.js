@@ -104,7 +104,6 @@ export class TerminalManager {
       this.pushEvent('connect', { cols, rows, terminal_id: terminalId });
     }
 
-    // Focus terminal and scroll to bottom
     setTimeout(() => {
       terminal.focus();
       terminal.scrollToBottom();
@@ -118,7 +117,6 @@ export class TerminalManager {
       const terminal = this.terminals[terminalId];
       if (terminal && !terminal.disposed) {
         terminal.write(data);
-        // Automatically scroll to bottom after writing data
         terminal.scrollToBottom();
       }
     } else {

@@ -11,6 +11,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
     terminal = ClaudeLive.TerminalManager.get_terminal(terminal_id)
 
     if terminal do
+      ClaudeLive.TerminalManager.subscribe()
+
       socket =
         socket
         |> assign(:terminal_id, terminal_id)
@@ -135,12 +137,33 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
+  def handle_event("close-terminal", %{"terminal-id" => terminal_id}, socket) do
+    case ClaudeLive.TerminalManager.delete_terminal(terminal_id) do
+      :ok ->
+        if terminal_id == socket.assigns.terminal_id do
+          remaining_terminals = ClaudeLive.TerminalManager.list_terminals()
+
+          if map_size(remaining_terminals) > 0 do
+            {first_id, _} = Enum.at(remaining_terminals, 0)
+            {:noreply, push_navigate(socket, to: ~p"/terminals/#{first_id}")}
+          else
+            {:noreply, push_navigate(socket, to: ~p"/")}
+          end
+        else
+          {:noreply,
+           assign(socket, :global_terminals, ClaudeLive.TerminalManager.list_terminals())}
+        end
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Terminal not found")}
+    end
+  end
+
+  @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
-    # This terminal ONLY receives messages for its specific session
     if session_id == socket.assigns.session_id do
       {:noreply, push_event(socket, "terminal_output", %{data: data})}
     else
-      # This should never happen with proper isolation
       Logger.warning(
         "Terminal #{socket.assigns.terminal_id} received data for wrong session: #{session_id}"
       )
@@ -181,6 +204,25 @@ defmodule ClaudeLiveWeb.TerminalLive do
   @impl true
   def handle_info({:terminal_updated, _}, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:terminal_deleted, deleted_terminal_id}, socket) do
+    updated_socket =
+      assign(socket, :global_terminals, ClaudeLive.TerminalManager.list_terminals())
+
+    if deleted_terminal_id == socket.assigns.terminal_id do
+      remaining_terminals = updated_socket.assigns.global_terminals
+
+      if map_size(remaining_terminals) > 0 do
+        {first_id, _} = Enum.at(remaining_terminals, 0)
+        {:noreply, push_navigate(updated_socket, to: ~p"/terminals/#{first_id}")}
+      else
+        {:noreply, push_navigate(updated_socket, to: ~p"/")}
+      end
+    else
+      {:noreply, updated_socket}
+    end
   end
 
   @impl true
@@ -227,13 +269,14 @@ defmodule ClaudeLiveWeb.TerminalLive do
           <%= if map_size(@global_terminals) > 0 do %>
             <%= for {tid, terminal} <- @global_terminals do %>
               <div class={[
-                "mx-2 mb-1 rounded-lg group relative transition-all duration-200",
+                "mx-2 mb-1 rounded-lg group relative transition-all duration-200 flex items-center",
                 tid == @terminal_id &&
-                  "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20"
+                  "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20",
+                tid != @terminal_id && "hover:bg-gray-800/50"
               ]}>
                 <.link
                   navigate={~p"/terminals/#{tid}"}
-                  class="block px-4 py-3 hover:bg-gray-800/50 transition-all duration-200"
+                  class="flex-1 block pl-4 pr-2 py-3 transition-all duration-200 rounded-l-lg"
                 >
                   <div class="flex items-center space-x-3">
                     <div class={[
@@ -269,6 +312,14 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     </div>
                   </div>
                 </.link>
+                <button
+                  phx-click="close-terminal"
+                  phx-value-terminal-id={tid}
+                  class="p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
+                  title="Close terminal"
+                >
+                  <.icon name="hero-x-mark" class="w-4 h-4" />
+                </button>
               </div>
             <% end %>
           <% else %>
@@ -351,6 +402,15 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
                   />
                 </svg>
+              </button>
+              <div class="border-l border-gray-700 h-6 mx-2"></div>
+              <button
+                phx-click="close-terminal"
+                phx-value-terminal-id={@terminal_id}
+                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-900/30 transition-colors cursor-pointer group"
+                title="Close terminal"
+              >
+                <.icon name="hero-x-mark" class="w-4 h-4 text-gray-400 group-hover:text-red-400" />
               </button>
             </div>
           </div>
