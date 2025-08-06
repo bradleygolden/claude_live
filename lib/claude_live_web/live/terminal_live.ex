@@ -226,6 +226,34 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
+  def handle_event("open-in-iterm", %{"path" => path}, socket) do
+    encoded_path = URI.encode(path)
+    command = URI.encode("cd #{path} && claude code")
+    iterm_url = "iterm2://app/command?d=#{encoded_path}&c=#{command}"
+
+    {:noreply,
+     socket
+     |> push_event("open-url", %{url: iterm_url})
+     |> put_flash(:info, "Opening in iTerm2...")}
+  end
+
+  @impl true
+  def handle_event("open-in-zed", %{"path" => path}, socket) do
+    case System.cmd("zed", [path], stderr_to_stdout: true) do
+      {_output, 0} ->
+        {:noreply, put_flash(socket, :info, "Opening in Zed...")}
+
+      {_output, _status} ->
+        zed_url = "zed://file/#{URI.encode(path)}"
+
+        {:noreply,
+         socket
+         |> push_event("open-url", %{url: zed_url})
+         |> put_flash(:info, "Opening in Zed...")}
+    end
+  end
+
+  @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     terminals = socket.assigns[:global_terminals] || %{}
     terminal_id = find_terminal_by_session(terminals, session_id)
@@ -567,6 +595,48 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   </div>
                 </div>
               </div>
+              <div class="flex items-center gap-1 ml-4">
+                <button
+                  phx-click="open-in-iterm"
+                  phx-value-path={active_terminal.worktree_path}
+                  class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors cursor-pointer"
+                  title="Open in iTerm2"
+                >
+                  <svg
+                    class="w-4 h-4 text-gray-400 hover:text-gray-200"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  phx-click="open-in-zed"
+                  phx-value-path={active_terminal.worktree_path}
+                  class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors cursor-pointer"
+                  title="Open in Zed"
+                >
+                  <svg
+                    class="w-4 h-4 text-gray-400 hover:text-gray-200"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="flex items-center space-x-4">
               <div class="flex items-center space-x-2">
@@ -625,6 +695,16 @@ defmodule ClaudeLiveWeb.TerminalLive do
         </div>
       </div>
     </div>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".OpenUrl">
+      export default {
+        mounted() {
+          this.handleEvent("open-url", ({url}) => {
+            window.location.href = url
+          })
+        }
+      }
+    </script>
     """
   end
 end
