@@ -77,7 +77,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
     terminals = Map.delete(socket.assigns.terminals, terminal_id)
 
-    # Select a new active terminal if we closed the active one
     new_active =
       if socket.assigns.active_terminal_id == terminal_id do
         case Map.keys(terminals) do
@@ -168,7 +167,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def handle_event("disconnect", _params, socket) do
-    # Disconnect all terminals in current worktree
     socket.assigns.terminals
     |> Enum.filter(fn {_id, t} -> t.worktree_id == socket.assigns.worktree.id && t.connected end)
     |> Enum.each(fn {_id, terminal} ->
@@ -241,7 +239,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def terminate(_reason, socket) do
-    # Unsubscribe from all connected terminals
     socket.assigns.terminals
     |> Enum.filter(fn {_id, terminal} -> terminal.connected end)
     |> Enum.each(fn {_id, terminal} ->
@@ -251,14 +248,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
     :ok
   end
 
-  # Private helpers
-
   defp load_all_terminals(socket) do
-    # Load existing terminal sessions for all worktrees
     terminals =
       socket.assigns.worktrees
       |> Enum.flat_map(fn worktree ->
-        # Check for existing sessions using the old format
         session_id = "terminal-#{worktree.id}"
 
         if ClaudeLive.Terminal.PtyServer.exists?(session_id) do
@@ -283,7 +276,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
       end)
       |> Map.new()
 
-    # Set active terminal to the first one for current worktree if any
     active_id =
       terminals
       |> Enum.find(fn {_id, t} -> t.worktree_id == socket.assigns.worktree.id end)
@@ -365,7 +357,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
             this.switchTerminal(terminal_id);
           });
           
-          // Initialize first terminal if exists
           const firstTerminal = this.el.querySelector('[data-terminal-id]');
           if (firstTerminal) {
             const terminalId = firstTerminal.dataset.terminalId;
@@ -389,7 +380,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
             return;
           }
           
-          // Clean up existing terminal if it exists
           if (this.terminals[terminalId]) {
             if (this.terminals[terminalId].resizeObserver) {
               this.terminals[terminalId].resizeObserver.disconnect();
@@ -435,12 +425,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
           this.terminals[terminalId] = terminal;
           this.terminals[terminalId].fitAddon = fitAddon;
           
-          // Setup event handlers
           terminal.onData(data => {
             this.pushEvent("input", { data, terminal_id: terminalId });
           });
           
-          // Setup resize observer
           const resizeObserver = new ResizeObserver(() => {
             if (this.terminals[terminalId] && this.terminals[terminalId].fitAddon) {
               this.terminals[terminalId].fitAddon.fit();
@@ -452,31 +440,25 @@ defmodule ClaudeLiveWeb.TerminalLive do
           resizeObserver.observe(container);
           this.terminals[terminalId].resizeObserver = resizeObserver;
           
-          // Connect to backend
           const cols = terminal.cols;
           const rows = terminal.rows;
           this.pushEvent("connect", { cols, rows, terminal_id: terminalId });
           
-          // Focus the terminal
           setTimeout(() => terminal.focus(), 100);
         },
         
         switchTerminal(terminalId) {
-          // Hide all terminals
           document.querySelectorAll('.terminal-container').forEach(el => {
             el.style.display = 'none';
           });
           
-          // Show selected terminal
           const container = document.getElementById(`terminal-container-${terminalId}`);
           if (container) {
             container.style.display = 'block';
             
-            // Initialize if not already done
             if (!this.terminals[terminalId]) {
               this.initTerminal(terminalId);
             } else {
-              // Refit and focus
               if (this.terminals[terminalId].fitAddon) {
                 this.terminals[terminalId].fitAddon.fit();
               }
@@ -488,7 +470,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
         },
         
         destroyed() {
-          // Clean up all terminals
           Object.keys(this.terminals).forEach(terminalId => {
             if (this.terminals[terminalId]) {
               if (this.terminals[terminalId].resizeObserver) {
@@ -503,7 +484,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
     </script>
 
     <div class="h-screen bg-gray-900 flex">
-      <!-- Sidebar for workspace and terminal switching -->
       <div class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
         <div class="p-4 border-b border-gray-700">
           <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">
@@ -602,8 +582,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
           </.link>
         </div>
       </div>
-      
-    <!-- Terminal area -->
+
       <div class="flex-1 flex flex-col">
         <%= if @active_terminal_id && @terminals[@active_terminal_id] do %>
           <% active_terminal = @terminals[@active_terminal_id] %>
