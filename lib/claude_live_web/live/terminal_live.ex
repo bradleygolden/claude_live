@@ -403,15 +403,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   />
                 </svg>
               </button>
-              <div class="border-l border-gray-700 h-6 mx-2"></div>
-              <button
-                phx-click="close-terminal"
-                phx-value-terminal-id={@terminal_id}
-                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-900/30 transition-colors cursor-pointer group"
-                title="Close terminal"
-              >
-                <.icon name="hero-x-mark" class="w-4 h-4 text-gray-400 group-hover:text-red-400" />
-              </button>
             </div>
           </div>
           <div class="flex items-center space-x-2">
