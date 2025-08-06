@@ -20,6 +20,7 @@ defmodule ClaudeLive.Application do
       {Registry, keys: :unique, name: ClaudeLive.Terminal.Registry},
       ClaudeLive.Terminal.Supervisor,
       ClaudeLive.TerminalManager,
+      ClaudeLive.UIPreferences,
       ClaudeLiveWeb.Endpoint
     ]
 

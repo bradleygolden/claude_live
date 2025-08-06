@@ -202,6 +202,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
+  def handle_event("toggle_sidebar", _params, socket) do
+    ClaudeLive.UIPreferences.toggle_sidebar()
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     terminals = socket.assigns[:global_terminals] || %{}
     terminal_id = find_terminal_by_session(terminals, session_id)
@@ -230,6 +236,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def handle_info({:terminal_activated, _}, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:ui_preference_updated, _}, socket) do
+    # UI preferences are already handled by the hook
     {:noreply, socket}
   end
 
@@ -360,12 +372,41 @@ defmodule ClaudeLiveWeb.TerminalLive do
   def render(assigns) do
     ~H"""
     <div class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex">
-      <div class="w-72 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col">
-        <div class="p-6 border-b border-gray-800/50">
-          <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
-            All Terminals
-          </h3>
-          <p class="text-xs text-gray-500 mt-2">Across {length(@repositories)} repositories</p>
+      <!-- Sidebar -->
+      <div class={[
+        "bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out",
+        (@ui_preferences.sidebar_collapsed && "w-16") || "w-72"
+      ]}>
+        <!-- Header with toggle button -->
+        <div class="border-b border-gray-800/50">
+          <div class={[
+            "flex items-center justify-between",
+            (@ui_preferences.sidebar_collapsed && "p-4") || "p-6"
+          ]}>
+            <%= if !@ui_preferences.sidebar_collapsed do %>
+              <div class="flex-1">
+                <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
+                  All Terminals
+                </h3>
+                <p class="text-xs text-gray-500 mt-2">Across {length(@repositories)} repositories</p>
+              </div>
+            <% end %>
+            <button
+              phx-click="toggle_sidebar"
+              class={[
+                "flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-all duration-200 cursor-pointer group",
+                @ui_preferences.sidebar_collapsed && "mx-auto"
+              ]}
+              title={(@ui_preferences.sidebar_collapsed && "Expand sidebar") || "Collapse sidebar"}
+            >
+              <.icon
+                name={
+                  (@ui_preferences.sidebar_collapsed && "hero-chevron-right") || "hero-chevron-left"
+                }
+                class="w-5 h-5 text-gray-400 group-hover:text-gray-200"
+              />
+            </button>
+          </div>
         </div>
 
         <div class="flex-1 overflow-y-auto py-2">
@@ -384,70 +425,106 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     phx-click="switch_terminal"
                     phx-value-terminal_id={terminal_id}
                     data-terminal-id={terminal_id}
-                    class="flex-1 px-4 py-3 text-left rounded-lg hover:bg-gray-800/50 transition-all duration-200 flex items-center cursor-pointer"
+                    class={[
+                      "flex-1 text-left rounded-lg hover:bg-gray-800/50 transition-all duration-200 flex items-center cursor-pointer",
+                      (@ui_preferences.sidebar_collapsed && "px-3 py-3 justify-center") || "px-4 py-3"
+                    ]}
+                    title={
+                      @ui_preferences.sidebar_collapsed &&
+                        "#{terminal.name} - #{repository.name}/#{worktree.branch}"
+                    }
                   >
-                    <div class="flex items-center space-x-3 flex-1">
+                    <%= if @ui_preferences.sidebar_collapsed do %>
                       <div class={[
-                        "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                        "w-8 h-8 rounded-lg flex items-center justify-center",
                         (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
                           "bg-gradient-to-br from-gray-600 to-gray-700"
                       ]}>
-                        <.icon name="hero-command-line" class="w-5 h-5 text-white" />
+                        <.icon name="hero-command-line" class="w-4 h-4 text-white" />
                       </div>
-                      <div class="flex-1 min-w-0">
+                    <% else %>
+                      <div class="flex items-center space-x-3 flex-1">
                         <div class={[
-                          "text-sm font-semibold truncate",
-                          (terminal.connected && "text-gray-100") || "text-gray-400"
+                          "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                          (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                            "bg-gradient-to-br from-gray-600 to-gray-700"
                         ]}>
-                          {terminal.name}
+                          <.icon name="hero-command-line" class="w-5 h-5 text-white" />
                         </div>
-                        <div class="text-xs text-gray-500 truncate mt-0.5">
-                          {repository.name} / {worktree.branch}
-                        </div>
-                        <div class="flex items-center gap-1 mt-1">
-                          <span class={[
-                            "w-1.5 h-1.5 rounded-full",
-                            (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                        <div class="flex-1 min-w-0">
+                          <div class={[
+                            "text-sm font-semibold truncate",
+                            (terminal.connected && "text-gray-100") || "text-gray-400"
                           ]}>
-                          </span>
-                          <span class={[
-                            "text-xs",
-                            (terminal.connected && "text-emerald-400") || "text-gray-500"
-                          ]}>
-                            {(terminal.connected && "Connected") || "Disconnected"}
-                          </span>
+                            {terminal.name}
+                          </div>
+                          <div class="text-xs text-gray-500 truncate mt-0.5">
+                            {repository.name} / {worktree.branch}
+                          </div>
+                          <div class="flex items-center gap-1 mt-1">
+                            <span class={[
+                              "w-1.5 h-1.5 rounded-full",
+                              (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                            ]}>
+                            </span>
+                            <span class={[
+                              "text-xs",
+                              (terminal.connected && "text-emerald-400") || "text-gray-500"
+                            ]}>
+                              {(terminal.connected && "Connected") || "Disconnected"}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    <% end %>
                   </button>
-                  <button
-                    phx-click="close_terminal"
-                    phx-value-terminal_id={terminal_id}
-                    class="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-950/30 transition-all duration-200 cursor-pointer"
-                  >
-                    <.icon name="hero-x-mark" class="w-4 h-4 text-red-400" />
-                  </button>
+                  <%= if !@ui_preferences.sidebar_collapsed do %>
+                    <button
+                      phx-click="close_terminal"
+                      phx-value-terminal_id={terminal_id}
+                      class="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-950/30 transition-all duration-200 cursor-pointer"
+                    >
+                      <.icon name="hero-x-mark" class="w-4 h-4 text-red-400" />
+                    </button>
+                  <% end %>
                 </div>
               </div>
             <% end %>
           <% else %>
-            <div class="px-4 py-12 text-center">
-              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mx-auto mb-4">
-                <.icon name="hero-command-line" class="w-8 h-8 text-gray-500" />
+            <%= if !@ui_preferences.sidebar_collapsed do %>
+              <div class="px-4 py-12 text-center">
+                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mx-auto mb-4">
+                  <.icon name="hero-command-line" class="w-8 h-8 text-gray-500" />
+                </div>
+                <p class="text-sm font-medium text-gray-400">No active terminals</p>
+                <p class="text-xs text-gray-500 mt-2">Create terminals from the dashboard</p>
               </div>
-              <p class="text-sm font-medium text-gray-400">No active terminals</p>
-              <p class="text-xs text-gray-500 mt-2">Create terminals from the dashboard</p>
-            </div>
+            <% else %>
+              <div class="px-2 py-4 text-center">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mx-auto">
+                  <.icon name="hero-command-line" class="w-5 h-5 text-gray-500" />
+                </div>
+              </div>
+            <% end %>
           <% end %>
         </div>
 
-        <div class="p-4 border-t border-gray-800/50">
+        <div class={[
+          "border-t border-gray-800/50",
+          (@ui_preferences.sidebar_collapsed && "p-2") || "p-4"
+        ]}>
           <.link
             navigate={~p"/dashboard/#{@current_repository.id}"}
-            class="flex items-center justify-center px-4 py-2 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer"
+            class={[
+              "flex items-center justify-center text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer",
+              (@ui_preferences.sidebar_collapsed && "px-2 py-2") || "px-4 py-2"
+            ]}
+            title={@ui_preferences.sidebar_collapsed && "Back to Dashboard"}
           >
             <.icon name="hero-arrow-left" class="w-4 h-4" />
-            <span class="ml-2">Dashboard</span>
+            <%= if !@ui_preferences.sidebar_collapsed do %>
+              <span class="ml-2">Dashboard</span>
+            <% end %>
           </.link>
         </div>
       </div>

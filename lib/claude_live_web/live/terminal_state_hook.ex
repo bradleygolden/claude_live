@@ -1,7 +1,7 @@
 defmodule ClaudeLiveWeb.TerminalStateHook do
   @moduledoc """
-  LiveView on_mount hook that manages global terminal state across all LiveViews.
-  This hook subscribes to terminal PubSub updates and initializes terminal state.
+  LiveView on_mount hook that manages global terminal state and UI preferences across all LiveViews.
+  This hook subscribes to terminal and UI preference PubSub updates and initializes state.
   """
   import Phoenix.LiveView
   import Phoenix.Component
@@ -10,14 +10,22 @@ defmodule ClaudeLiveWeb.TerminalStateHook do
   def on_mount(:default, _params, _session, socket) do
     socket =
       if connected?(socket) do
+        # Subscribe to terminal updates
         ClaudeLive.TerminalManager.subscribe()
         terminals = ClaudeLive.TerminalManager.list_terminals()
 
+        # Subscribe to UI preferences
+        ClaudeLive.UIPreferences.subscribe()
+        ui_preferences = ClaudeLive.UIPreferences.get_preferences()
+
         socket
         |> assign(:global_terminals, terminals)
+        |> assign(:ui_preferences, ui_preferences)
         |> attach_hook(:terminal_state, :handle_info, &handle_terminal_info/2)
       else
-        assign(socket, :global_terminals, %{})
+        socket
+        |> assign(:global_terminals, %{})
+        |> assign(:ui_preferences, %{sidebar_collapsed: false})
       end
 
     {:cont, socket}
@@ -50,6 +58,11 @@ defmodule ClaudeLiveWeb.TerminalStateHook do
 
   defp handle_terminal_info({:terminal_activated, {_terminal_id, _session_id}}, socket) do
     {:cont, socket}
+  end
+
+  defp handle_terminal_info({:ui_preference_updated, {key, value}}, socket) do
+    updated_preferences = Map.put(socket.assigns.ui_preferences, key, value)
+    {:cont, assign(socket, :ui_preferences, updated_preferences)}
   end
 
   defp handle_terminal_info(_msg, socket) do
