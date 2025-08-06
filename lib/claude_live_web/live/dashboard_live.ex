@@ -921,8 +921,9 @@ defmodule ClaudeLiveWeb.DashboardLive do
                 navigate={~p"/terminal/#{first_worktree.id}"}
                 class="relative w-full inline-flex items-center justify-center px-4 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
               >
-                <.icon name="hero-command-line" class="w-5 h-5 mr-2" /> Terminal View
-                <span class="absolute top-2 right-2 px-2 py-0.5 bg-white/20 text-xs font-bold rounded-full">
+                <.icon name="hero-command-line" class="w-5 h-5" />
+                <span class="ml-2">Terminal View</span>
+                <span class="absolute top-2.5 right-2.5 flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 bg-white/20 text-xs font-bold rounded-full">
                   {total_terminals}
                 </span>
               </.link>
@@ -951,7 +952,8 @@ defmodule ClaudeLiveWeb.DashboardLive do
                     phx-click="new-worktree"
                     class="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                   >
-                    <.icon name="hero-plus" class="w-5 h-5 mr-2" /> New Worktree
+                    <.icon name="hero-plus" class="w-5 h-5" />
+                    <span class="ml-2">New Worktree</span>
                   </button>
                 </div>
               </div>
@@ -1000,7 +1002,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                   <button
                                     phx-click="open-in-iterm"
                                     phx-value-path={worktree.path}
-                                    class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                    class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                                     title="Open in iTerm2"
                                   >
                                     <svg
@@ -1021,7 +1023,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                   <button
                                     phx-click="open-in-zed"
                                     phx-value-path={worktree.path}
-                                    class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                    class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                                     title="Open in Zed"
                                   >
                                     <svg
@@ -1039,11 +1041,12 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                       </path>
                                     </svg>
                                   </button>
+                                  <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
                                   <button
                                     phx-click="delete-worktree"
                                     phx-value-id={worktree.id}
                                     data-confirm="Are you sure? This will delete the git worktree."
-                                    class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors ml-2 cursor-pointer"
+                                    class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
                                     title="Delete worktree"
                                   >
                                     <.icon
@@ -1088,7 +1091,8 @@ defmodule ClaudeLiveWeb.DashboardLive do
                               phx-value-worktree_id={worktree.id}
                               class="inline-flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
                             >
-                              <.icon name="hero-plus" class="w-4 h-4 mr-2" /> Create Terminal
+                              <.icon name="hero-plus" class="w-4 h-4" />
+                              <span class="ml-2">Create Terminal</span>
                             </button>
                           </div>
                         <% else %>

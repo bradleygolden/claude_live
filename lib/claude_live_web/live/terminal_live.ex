@@ -379,54 +379,55 @@ defmodule ClaudeLiveWeb.TerminalLive do
                 terminal_id == @active_terminal_id &&
                   "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20"
               ]}>
-                <button
-                  phx-click="switch_terminal"
-                  phx-value-terminal_id={terminal_id}
-                  data-terminal-id={terminal_id}
-                  class="w-full px-4 py-3 text-left rounded-lg hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-between cursor-pointer"
-                >
-                  <div class="flex items-center space-x-3">
-                    <div class={[
-                      "w-10 h-10 rounded-lg flex items-center justify-center",
-                      (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
-                        "bg-gradient-to-br from-gray-600 to-gray-700"
-                    ]}>
-                      <.icon name="hero-command-line" class="w-5 h-5 text-white" />
-                    </div>
-                    <div class="flex-1 min-w-0">
+                <div class="relative flex items-center">
+                  <button
+                    phx-click="switch_terminal"
+                    phx-value-terminal_id={terminal_id}
+                    data-terminal-id={terminal_id}
+                    class="flex-1 px-4 py-3 text-left rounded-lg hover:bg-gray-800/50 transition-all duration-200 flex items-center cursor-pointer"
+                  >
+                    <div class="flex items-center space-x-3 flex-1">
                       <div class={[
-                        "text-sm font-semibold truncate",
-                        (terminal.connected && "text-gray-100") || "text-gray-400"
+                        "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                        (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                          "bg-gradient-to-br from-gray-600 to-gray-700"
                       ]}>
-                        {terminal.name}
+                        <.icon name="hero-command-line" class="w-5 h-5 text-white" />
                       </div>
-                      <div class="text-xs text-gray-500 truncate mt-0.5">
-                        {repository.name} / {worktree.branch}
-                      </div>
-                      <div class="flex items-center gap-1 mt-1">
-                        <span class={[
-                          "w-1.5 h-1.5 rounded-full",
-                          (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                      <div class="flex-1 min-w-0">
+                        <div class={[
+                          "text-sm font-semibold truncate",
+                          (terminal.connected && "text-gray-100") || "text-gray-400"
                         ]}>
-                        </span>
-                        <span class={[
-                          "text-xs",
-                          (terminal.connected && "text-emerald-400") || "text-gray-500"
-                        ]}>
-                          {(terminal.connected && "Connected") || "Disconnected"}
-                        </span>
+                          {terminal.name}
+                        </div>
+                        <div class="text-xs text-gray-500 truncate mt-0.5">
+                          {repository.name} / {worktree.branch}
+                        </div>
+                        <div class="flex items-center gap-1 mt-1">
+                          <span class={[
+                            "w-1.5 h-1.5 rounded-full",
+                            (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                          ]}>
+                          </span>
+                          <span class={[
+                            "text-xs",
+                            (terminal.connected && "text-emerald-400") || "text-gray-500"
+                          ]}>
+                            {(terminal.connected && "Connected") || "Disconnected"}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                   <button
                     phx-click="close_terminal"
                     phx-value-terminal_id={terminal_id}
-                    class="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-950/30 transition-all duration-200 cursor-pointer"
-                    onclick="event.stopPropagation()"
+                    class="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-950/30 transition-all duration-200 cursor-pointer"
                   >
                     <.icon name="hero-x-mark" class="w-4 h-4 text-red-400" />
                   </button>
-                </button>
+                </div>
               </div>
             <% end %>
           <% else %>
@@ -445,7 +446,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
             navigate={~p"/dashboard/#{@current_repository.id}"}
             class="flex items-center justify-center px-4 py-2 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer"
           >
-            <.icon name="hero-arrow-left" class="w-4 h-4 mr-2" /> Dashboard
+            <.icon name="hero-arrow-left" class="w-4 h-4" />
+            <span class="ml-2">Dashboard</span>
           </.link>
         </div>
       </div>
