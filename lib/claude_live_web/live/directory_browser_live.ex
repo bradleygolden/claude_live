@@ -16,89 +16,189 @@ defmodule ClaudeLiveWeb.DirectoryBrowserLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="max-w-4xl mx-auto p-6">
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
-          Select Repository Directory
-        </h2>
-        
-    <!-- Current Path -->
-        <div class="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded">
-          <p class="text-sm font-mono text-gray-700 dark:text-gray-300">
-            Current: {@current_path}
-          </p>
+    <div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black">
+      <!-- Header -->
+      <div class="bg-gray-900/80 backdrop-blur-sm border-b border-gray-800/50">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Add Repository
+              </h1>
+              <p class="text-sm text-gray-400 mt-1">
+                Navigate to a Git repository to add it to your workspace
+              </p>
+            </div>
+            <.link
+              navigate={~p"/"}
+              class="px-4 py-2 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2"
+            >
+              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back to Dashboard
+            </.link>
+          </div>
         </div>
-        
-    <!-- Directory Contents -->
-        <div class="border dark:border-gray-700 rounded-lg overflow-hidden mb-4">
-          <div class="max-h-96 overflow-y-auto">
-            <!-- Parent Directory -->
-            <%= if @current_path != "/" do %>
-              <div
-                class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b dark:border-gray-700"
-                phx-click="navigate"
-                phx-value-path={Path.dirname(@current_path)}
-              >
-                <div class="flex items-center">
-                  <.icon name="hero-arrow-up" class="w-5 h-5 mr-2 text-gray-500" />
-                  <span class="text-gray-600 dark:text-gray-400">..</span>
+      </div>
+      
+    <!-- Main Content -->
+      <div class="max-w-7xl mx-auto px-6 py-8">
+        <div class="bg-gray-900/50 backdrop-blur-sm rounded-2xl border border-gray-800/50 overflow-hidden">
+          <!-- Current Path -->
+          <div class="p-6 border-b border-gray-800/50">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <.icon name="hero-folder-open" class="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p class="text-xs text-gray-500 uppercase tracking-wider">Current Directory</p>
+                  <p class="text-sm font-mono text-gray-300">
+                    {@current_path}
+                  </p>
                 </div>
               </div>
-            <% end %>
-            
-    <!-- Directories -->
-            <%= for {name, type, path} <- @entries, type == :directory do %>
-              <div
-                class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b dark:border-gray-700"
-                phx-click="navigate"
-                phx-value-path={path}
-              >
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center">
-                    <.icon name="hero-folder" class="w-5 h-5 mr-2 text-blue-500" />
-                    <span class="text-gray-900 dark:text-gray-100">{name}</span>
+              <%= if is_git_repo?(@current_path) do %>
+                <span class="inline-flex items-center gap-2 text-sm bg-emerald-950/50 text-emerald-400 px-4 py-2 rounded-full border border-emerald-900/50">
+                  <.icon name="hero-check-circle" class="w-4 h-4" /> Git Repository
+                </span>
+              <% end %>
+            </div>
+          </div>
+          
+    <!-- Directory Browser -->
+          <div class="flex">
+            <!-- Directory List -->
+            <div class="flex-1 border-r border-gray-800/50">
+              <div class="max-h-[500px] overflow-y-auto">
+                <!-- Parent Directory -->
+                <%= if @current_path != "/" do %>
+                  <div
+                    class="px-6 py-4 hover:bg-gray-800/30 cursor-pointer border-b border-gray-800/50 transition-all duration-200 group"
+                    phx-click="navigate"
+                    phx-value-path={Path.dirname(@current_path)}
+                  >
+                    <div class="flex items-center">
+                      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mr-3 group-hover:from-gray-600 group-hover:to-gray-700 transition-all duration-200">
+                        <.icon name="hero-arrow-up" class="w-5 h-5 text-gray-400" />
+                      </div>
+                      <span class="text-gray-400 font-medium">Parent Directory</span>
+                    </div>
                   </div>
-                  <%= if is_git_repo?(path) do %>
-                    <span class="text-xs bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-1 rounded">
-                      Git Repo
-                    </span>
+                <% end %>
+                
+    <!-- Directories -->
+                <%= for {name, type, path} <- @entries, type == :directory do %>
+                  <div
+                    class="px-6 py-4 hover:bg-gray-800/30 cursor-pointer border-b border-gray-800/50 transition-all duration-200 group"
+                    phx-click="navigate"
+                    phx-value-path={path}
+                  >
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center">
+                        <div class={[
+                          "w-10 h-10 rounded-lg flex items-center justify-center mr-3 transition-all duration-200",
+                          (is_git_repo?(path) &&
+                             "bg-gradient-to-br from-emerald-500 to-green-600 group-hover:from-emerald-400 group-hover:to-green-500") ||
+                            "bg-gradient-to-br from-blue-600 to-indigo-700 group-hover:from-blue-500 group-hover:to-indigo-600"
+                        ]}>
+                          <.icon name="hero-folder" class="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p class="text-gray-100 font-medium">{name}</p>
+                          <%= if is_git_repo?(path) do %>
+                            <p class="text-xs text-emerald-400 mt-0.5">Contains .git</p>
+                          <% end %>
+                        </div>
+                      </div>
+                      <.icon
+                        name="hero-chevron-right"
+                        class="w-5 h-5 text-gray-600 group-hover:text-gray-400"
+                      />
+                    </div>
+                  </div>
+                <% end %>
+                
+    <!-- Files (shown but not selectable) -->
+                <%= for {name, type, _path} <- @entries, type == :file do %>
+                  <div class="px-6 py-4 opacity-40 border-b border-gray-800/50">
+                    <div class="flex items-center">
+                      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mr-3">
+                        <.icon name="hero-document" class="w-5 h-5 text-gray-500" />
+                      </div>
+                      <span class="text-gray-500">{name}</span>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+            
+    <!-- Info Panel -->
+            <div class="w-80 p-6 bg-gray-950/50">
+              <h3 class="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">
+                Repository Info
+              </h3>
+
+              <%= if is_git_repo?(@current_path) do %>
+                <div class="space-y-4">
+                  <div class="p-4 bg-emerald-950/30 rounded-lg border border-emerald-900/50">
+                    <div class="flex items-center gap-3 mb-3">
+                      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+                        <.icon name="hero-check" class="w-4 h-4 text-white" />
+                      </div>
+                      <p class="text-sm font-medium text-emerald-400">Valid Repository</p>
+                    </div>
+                    <p class="text-xs text-gray-400">
+                      This directory contains a Git repository and can be added to your workspace.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    phx-click="select-current"
+                    class="w-full px-6 py-3 text-sm font-medium bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-400 hover:to-purple-500 text-white rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <.icon name="hero-plus-circle" class="w-5 h-5" /> Add This Repository
+                  </button>
+                </div>
+              <% else %>
+                <div class="p-4 bg-gray-800/30 rounded-lg border border-gray-700/50">
+                  <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-600 to-orange-700 flex items-center justify-center">
+                      <.icon name="hero-exclamation-triangle" class="w-4 h-4 text-white" />
+                    </div>
+                    <p class="text-sm font-medium text-amber-400">Not a Repository</p>
+                  </div>
+                  <p class="text-xs text-gray-400">
+                    Navigate to a directory containing a .git folder to add it to your workspace.
+                  </p>
+                </div>
+              <% end %>
+
+              <div class="mt-6 pt-6 border-t border-gray-800/50">
+                <h4 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+                  Quick Navigation
+                </h4>
+                <div class="space-y-2">
+                  <button
+                    phx-click="navigate"
+                    phx-value-path={System.user_home!()}
+                    class="w-full text-left px-3 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800/30 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2"
+                  >
+                    <.icon name="hero-home" class="w-4 h-4" /> Home Directory
+                  </button>
+                  <%= if File.exists?(Path.join(System.user_home!(), "Development")) do %>
+                    <button
+                      phx-click="navigate"
+                      phx-value-path={Path.join(System.user_home!(), "Development")}
+                      class="w-full text-left px-3 py-2 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800/30 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2"
+                    >
+                      <.icon name="hero-code-bracket" class="w-4 h-4" /> Development
+                    </button>
                   <% end %>
                 </div>
               </div>
-            <% end %>
-            
-    <!-- Files (shown but not selectable) -->
-            <%= for {name, type, _path} <- @entries, type == :file do %>
-              <div class="p-3 opacity-50 border-b dark:border-gray-700">
-                <div class="flex items-center">
-                  <.icon name="hero-document" class="w-5 h-5 mr-2 text-gray-400" />
-                  <span class="text-gray-600 dark:text-gray-400">{name}</span>
-                </div>
-              </div>
-            <% end %>
+            </div>
           </div>
         </div>
-        
-    <!-- Actions -->
-        <div class="flex gap-4">
-          <.button
-            type="button"
-            phx-click="select-current"
-            variant="primary"
-            disabled={!is_git_repo?(@current_path)}
-          >
-            Select This Directory
-          </.button>
-          <.button type="button" phx-click="cancel">
-            Cancel
-          </.button>
-        </div>
-
-        <%= if !is_git_repo?(@current_path) do %>
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-            Only Git repositories can be selected. Navigate to a directory containing a .git folder.
-          </p>
-        <% end %>
       </div>
     </div>
     """

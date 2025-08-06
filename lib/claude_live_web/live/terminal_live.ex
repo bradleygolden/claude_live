@@ -359,84 +359,93 @@ defmodule ClaudeLiveWeb.TerminalLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="h-screen bg-gray-900 flex">
-      <div class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
-        <div class="p-4 border-b border-gray-700">
-          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+    <div class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex">
+      <div class="w-72 bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col">
+        <div class="p-6 border-b border-gray-800/50">
+          <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
             All Terminals
           </h3>
-          <p class="text-xs text-gray-500 mt-1">All Repositories ({length(@repositories)} repos)</p>
+          <p class="text-xs text-gray-500 mt-2">Across {length(@repositories)} repositories</p>
         </div>
 
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto py-2">
           <% active_terminals = get_all_active_terminals_sorted(assigns.global_terminals) %>
           <%= if length(active_terminals) > 0 do %>
             <%= for {terminal_id, terminal} <- active_terminals do %>
               <% worktree = Enum.find(@worktrees, &(&1.id == terminal.worktree_id)) %>
               <% repository = Enum.find(@repositories, &(&1.id == worktree.repository_id)) %>
-              <button
-                phx-click="switch_terminal"
-                phx-value-terminal_id={terminal_id}
-                data-terminal-id={terminal_id}
-                class={[
-                  "w-full px-4 py-3 text-left hover:bg-gray-700 transition flex items-center justify-between group border-b border-gray-700",
-                  terminal_id == @active_terminal_id && "bg-gray-700"
-                ]}
-              >
-                <div class="flex items-center space-x-3">
-                  <.icon
-                    name="hero-command-line"
-                    class={"w-4 h-4 #{terminal.connected && "text-green-400" || "text-gray-500"}"}
-                  />
-                  <div class="flex-1 min-w-0">
+              <div class={[
+                "mx-2 mb-1 rounded-lg group relative transition-all duration-200",
+                terminal_id == @active_terminal_id &&
+                  "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20"
+              ]}>
+                <button
+                  phx-click="switch_terminal"
+                  phx-value-terminal_id={terminal_id}
+                  data-terminal-id={terminal_id}
+                  class="w-full px-4 py-3 text-left rounded-lg hover:bg-gray-800/50 transition-all duration-200 flex items-center justify-between cursor-pointer"
+                >
+                  <div class="flex items-center space-x-3">
                     <div class={[
-                      "text-sm font-medium truncate",
-                      (terminal.connected && "text-gray-200") || "text-gray-400"
+                      "w-10 h-10 rounded-lg flex items-center justify-center",
+                      (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                        "bg-gradient-to-br from-gray-600 to-gray-700"
                     ]}>
-                      {terminal.name}
+                      <.icon name="hero-command-line" class="w-5 h-5 text-white" />
                     </div>
-                    <div class="text-xs text-gray-500 truncate">
-                      {repository.name} • {worktree.branch}
-                    </div>
-                    <div class="text-xs">
-                      <%= if terminal.connected do %>
-                        <span class="text-green-400">• connected</span>
-                      <% else %>
-                        <span class="text-gray-500">• disconnected</span>
-                      <% end %>
+                    <div class="flex-1 min-w-0">
+                      <div class={[
+                        "text-sm font-semibold truncate",
+                        (terminal.connected && "text-gray-100") || "text-gray-400"
+                      ]}>
+                        {terminal.name}
+                      </div>
+                      <div class="text-xs text-gray-500 truncate mt-0.5">
+                        {repository.name} / {worktree.branch}
+                      </div>
+                      <div class="flex items-center gap-1 mt-1">
+                        <span class={[
+                          "w-1.5 h-1.5 rounded-full",
+                          (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                        ]}>
+                        </span>
+                        <span class={[
+                          "text-xs",
+                          (terminal.connected && "text-emerald-400") || "text-gray-500"
+                        ]}>
+                          {(terminal.connected && "Connected") || "Disconnected"}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span class={[
-                    "w-2 h-2 rounded-full flex-shrink-0",
-                    (terminal.connected && "bg-green-500") || "bg-gray-500"
-                  ]}>
-                  </span>
-                </div>
-                <button
-                  phx-click="close_terminal"
-                  phx-value-terminal_id={terminal_id}
-                  class="opacity-0 group-hover:opacity-100 transition"
-                  onclick="event.stopPropagation()"
-                >
-                  <.icon name="hero-x-mark" class="w-3 h-3 text-gray-500 hover:text-red-400" />
+                  <button
+                    phx-click="close_terminal"
+                    phx-value-terminal_id={terminal_id}
+                    class="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-950/30 transition-all duration-200 cursor-pointer"
+                    onclick="event.stopPropagation()"
+                  >
+                    <.icon name="hero-x-mark" class="w-4 h-4 text-red-400" />
+                  </button>
                 </button>
-              </button>
+              </div>
             <% end %>
           <% else %>
-            <div class="px-4 py-8 text-center text-gray-500">
-              <.icon name="hero-command-line" class="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p class="text-sm">No active terminals</p>
-              <p class="text-xs mt-1">Create terminals from the dashboard to see them here</p>
+            <div class="px-4 py-12 text-center">
+              <div class="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mx-auto mb-4">
+                <.icon name="hero-command-line" class="w-8 h-8 text-gray-500" />
+              </div>
+              <p class="text-sm font-medium text-gray-400">No active terminals</p>
+              <p class="text-xs text-gray-500 mt-2">Create terminals from the dashboard</p>
             </div>
           <% end %>
         </div>
 
-        <div class="p-3 border-t border-gray-700">
+        <div class="p-4 border-t border-gray-800/50">
           <.link
             navigate={~p"/dashboard/#{@current_repository.id}"}
-            class="flex items-center text-sm text-gray-400 hover:text-gray-200 transition"
+            class="flex items-center justify-center px-4 py-2 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer"
           >
-            <.icon name="hero-arrow-left" class="w-4 h-4 mr-2" /> Back to Dashboard
+            <.icon name="hero-arrow-left" class="w-4 h-4 mr-2" /> Dashboard
           </.link>
         </div>
       </div>
@@ -444,31 +453,43 @@ defmodule ClaudeLiveWeb.TerminalLive do
       <div class="flex-1 flex flex-col">
         <%= if @active_terminal_id && Map.get(assigns.global_terminals, @active_terminal_id) do %>
           <% active_terminal = Map.get(assigns.global_terminals, @active_terminal_id) %>
-          <div class="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <h2 class="text-white font-semibold">{active_terminal.name}</h2>
-              <span class="text-sm text-gray-400">
-                {active_terminal.worktree_branch}
-              </span>
-              <span class="text-xs text-gray-500">
-                {active_terminal.worktree_path}
-              </span>
+          <div class="bg-gray-900/80 backdrop-blur-sm px-6 py-3 border-b border-gray-800/50 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+                  <.icon name="hero-command-line" class="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h2 class="text-white font-bold">{active_terminal.name}</h2>
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="text-emerald-400">{active_terminal.worktree_branch}</span>
+                    <span class="text-gray-600">•</span>
+                    <span class="text-gray-500 truncate max-w-md">
+                      {active_terminal.worktree_path}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="flex items-center space-x-4">
               <div class="flex items-center space-x-2">
                 <span class={[
-                  "inline-block w-3 h-3 rounded-full",
-                  (active_terminal.connected && "bg-green-500") || "bg-red-500"
+                  "inline-block w-2 h-2 rounded-full",
+                  (active_terminal.connected &&
+                     "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
                 ]}>
                 </span>
-                <span class="text-sm text-gray-300">
+                <span class={[
+                  "text-sm font-medium",
+                  (active_terminal.connected && "text-emerald-400") || "text-red-400"
+                ]}>
                   {if active_terminal.connected, do: "Connected", else: "Disconnected"}
                 </span>
               </div>
               <%= if active_terminal.connected do %>
                 <button
                   phx-click="disconnect"
-                  class="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition"
+                  class="px-4 py-1.5 text-sm font-medium bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg border border-red-500/30 transition-all duration-200 cursor-pointer"
                 >
                   Disconnect All
                 </button>
@@ -481,10 +502,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
           <%= if map_size(assigns.global_terminals) == 0 do %>
             <div class="absolute inset-0 flex items-center justify-center" id="no-terminals-message">
               <div class="text-center">
-                <.icon name="hero-command-line" class="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                <p class="text-gray-400">No terminals open</p>
+                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center mx-auto mb-6">
+                  <.icon name="hero-command-line" class="w-10 h-10 text-gray-600" />
+                </div>
+                <p class="text-lg font-medium text-gray-400">No terminals open</p>
                 <p class="text-sm text-gray-500 mt-2">
-                  Click the + button next to a workspace to create a terminal
+                  Create a terminal from the dashboard to get started
                 </p>
               </div>
             </div>

@@ -820,7 +820,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    repositories = Ash.read!(ClaudeLive.Claude.Repository)
+    repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
 
     socket =
       socket
@@ -854,45 +854,81 @@ defmodule ClaudeLiveWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex h-screen bg-gray-50 dark:bg-gray-900" id="dashboard" phx-hook=".OpenUrl">
+    <div
+      class="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950"
+      id="dashboard"
+      phx-hook=".OpenUrl"
+    >
       <!-- Sidebar -->
-      <div class="w-64 bg-white dark:bg-gray-800 shadow-md">
-        <div class="p-4 border-b dark:border-gray-700">
-          <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Repositories</h2>
+      <div class="w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-xl border-r border-gray-200/50 dark:border-gray-800 flex flex-col">
+        <div class="p-6 border-b border-gray-200/50 dark:border-gray-800">
+          <h2 class="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+            Repositories
+          </h2>
           <.link
             navigate={~p"/dashboard/browse/directory"}
-            class="mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 cursor-pointer block"
+            class="mt-3 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200"
           >
-            + Add repository
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4">
+              </path>
+            </svg>
+            Add repository
           </.link>
         </div>
 
-        <div class="overflow-y-auto">
+        <div class="flex-1 overflow-y-auto py-2">
           <%= for repo <- @repositories do %>
             <div class={[
-              "px-4 py-3 border-b dark:border-gray-700 group relative",
+              "mx-2 mb-1 rounded-lg group relative transition-all duration-200",
               @selected_repository && @selected_repository.id == repo.id &&
-                "bg-blue-50 dark:bg-gray-700 border-blue-200 dark:border-blue-600"
+                "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 shadow-sm"
             ]}>
               <.link
                 patch={~p"/dashboard/#{repo.id}"}
-                class="block hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer -mx-4 px-4 py-2 rounded"
+                class="block px-4 py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-200"
               >
-                <div class="font-medium text-gray-900 dark:text-gray-100">{repo.name}</div>
-                <div class="text-sm text-gray-500 dark:text-gray-400 truncate">{repo.path}</div>
+                <div class="flex items-center">
+                  <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-3">
+                    <.icon name="hero-folder" class="w-5 h-5 text-white" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-gray-900 dark:text-gray-100">{repo.name}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{repo.path}</div>
+                  </div>
+                </div>
               </.link>
               <button
                 phx-click="remove-repository"
                 phx-value-id={repo.id}
-                class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1"
+                class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 cursor-pointer"
                 data-confirm="Remove this repository from the list?"
                 title="Remove repository"
               >
-                <.icon name="hero-trash" class="w-4 h-4" />
+                <.icon name="hero-trash" class="w-4 h-4 text-red-500 dark:text-red-400" />
               </button>
             </div>
           <% end %>
         </div>
+        
+    <!-- Terminal View Navigation in Sidebar -->
+        <% total_terminals = Map.values(@global_terminals) |> length() %>
+        <%= if total_terminals > 0 && length(@repositories) > 0 do %>
+          <% first_worktree = @repositories |> Enum.flat_map(& &1.worktrees) |> List.first() %>
+          <%= if first_worktree do %>
+            <div class="p-4 border-t border-gray-200/50 dark:border-gray-800">
+              <.link
+                navigate={~p"/terminal/#{first_worktree.id}"}
+                class="relative w-full inline-flex items-center justify-center px-4 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <.icon name="hero-command-line" class="w-5 h-5 mr-2" /> Terminal View
+                <span class="absolute top-2 right-2 px-2 py-0.5 bg-white/20 text-xs font-bold rounded-full">
+                  {total_terminals}
+                </span>
+              </.link>
+            </div>
+          <% end %>
+        <% end %>
       </div>
       
     <!-- Main Content -->
@@ -900,25 +936,32 @@ defmodule ClaudeLiveWeb.DashboardLive do
         <%= if @selected_repository do %>
           <div class="h-full flex flex-col">
             <!-- Header -->
-            <div class="bg-white dark:bg-gray-800 shadow px-6 py-4">
+            <div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-lg border-b border-gray-200/50 dark:border-gray-800 px-8 py-6">
               <div class="flex items-center justify-between">
                 <div>
-                  <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  <h1 class="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
                     {@selected_repository.name}
                   </h1>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">{@selected_repository.path}</p>
+                  <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    {@selected_repository.path}
+                  </p>
                 </div>
-                <.button phx-click="new-worktree" variant="primary">
-                  <.icon name="hero-plus" /> New Worktree
-                </.button>
+                <div class="flex items-center gap-3">
+                  <button
+                    phx-click="new-worktree"
+                    class="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+                  >
+                    <.icon name="hero-plus" class="w-5 h-5 mr-2" /> New Worktree
+                  </button>
+                </div>
               </div>
             </div>
             
     <!-- Worktrees List -->
-            <div class="flex-1 overflow-y-auto p-6">
+            <div class="flex-1 overflow-y-auto p-8">
               <%= if @show_new_worktree_form do %>
-                <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                  <h3 class="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">
+                <div class="mb-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-xl border border-gray-200/50 dark:border-gray-800 p-6">
+                  <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
                     Create New Worktree
                   </h3>
                   <.form
@@ -937,114 +980,191 @@ defmodule ClaudeLiveWeb.DashboardLive do
                 </div>
               <% end %>
 
-              <div class="space-y-4">
+              <div class="grid grid-cols-1 gap-4">
                 <%= for worktree <- @worktrees do %>
-                  <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                    <div class="flex items-center justify-between">
-                      <div class="flex-1">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-                          <.icon name="hero-folder" class="inline mr-2" />
-                          {worktree.branch}
-                        </h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          {worktree.path || "Creating..."}
-                        </p>
-                        
-    <!-- Terminals for this worktree -->
-                        <div class="mt-3">
-                          <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                              Terminals
-                            </span>
-                            <button
-                              phx-click="create_terminal"
-                              phx-value-worktree_id={worktree.id}
-                              class="inline-flex items-center px-2 py-1 text-xs font-medium text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 border border-green-300 dark:border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-900/50"
-                              title="Create new terminal"
-                            >
-                              <.icon name="hero-plus" class="w-3 h-3 mr-1" /> New Terminal
-                            </button>
+                  <div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl border border-gray-200/50 dark:border-gray-800 transition-all duration-300">
+                    <!-- Worktree Header -->
+                    <div class="p-6 pb-4">
+                      <div class="flex items-start justify-between">
+                        <div class="flex items-start flex-1">
+                          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0">
+                            <.icon name="hero-code-bracket" class="w-5 h-5 text-white" />
                           </div>
-                          <% worktree_terminals =
-                            get_worktree_terminals(@global_terminals, worktree.id) %>
-                          <%= if worktree_terminals == [] do %>
-                            <p class="text-sm text-gray-400 dark:text-gray-500">
-                              No active terminals
-                            </p>
-                          <% else %>
-                            <div class="space-y-2">
-                              <%= for terminal <- worktree_terminals do %>
-                                <div class="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700 rounded p-2">
-                                  <div class="flex items-center">
-                                    <span class={[
-                                      "inline-block w-2 h-2 rounded-full mr-2",
-                                      (terminal.connected && "bg-green-500") || "bg-gray-400"
-                                    ]}>
-                                    </span>
-                                    <.icon
-                                      name="hero-command-line"
-                                      class="w-3 h-3 mr-1 text-gray-500"
-                                    />
-                                    <span class="text-gray-700 dark:text-gray-300">
-                                      {terminal.name}
-                                    </span>
-                                  </div>
-                                  <.link
-                                    navigate={~p"/terminal/#{worktree.id}?terminal_id=#{terminal.id}"}
-                                    class="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/50"
+                          <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-3">
+                              <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">
+                                {worktree.branch}
+                              </h3>
+                              <%= if worktree.path do %>
+                                <div class="flex items-center gap-1">
+                                  <button
+                                    phx-click="open-in-iterm"
+                                    phx-value-path={worktree.path}
+                                    class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                    title="Open in iTerm2"
                                   >
-                                    <.icon name="hero-play" class="w-3 h-3 mr-1" /> Open
-                                  </.link>
+                                    <svg
+                                      class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                      >
+                                      </path>
+                                    </svg>
+                                  </button>
+                                  <button
+                                    phx-click="open-in-zed"
+                                    phx-value-path={worktree.path}
+                                    class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                    title="Open in Zed"
+                                  >
+                                    <svg
+                                      class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                                      >
+                                      </path>
+                                    </svg>
+                                  </button>
+                                  <button
+                                    phx-click="delete-worktree"
+                                    phx-value-id={worktree.id}
+                                    data-confirm="Are you sure? This will delete the git worktree."
+                                    class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors ml-2 cursor-pointer"
+                                    title="Delete worktree"
+                                  >
+                                    <.icon
+                                      name="hero-trash"
+                                      class="w-4 h-4 text-red-500 dark:text-red-400"
+                                    />
+                                  </button>
                                 </div>
                               <% end %>
                             </div>
-                          <% end %>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                              {worktree.path || "Creating..."}
+                            </p>
+                          </div>
                         </div>
                       </div>
+                    </div>
+                    
+    <!-- Terminals for this worktree -->
+                    <!-- Terminals Section -->
+                    <div class="border-t border-gray-200/50 dark:border-gray-800">
+                      <div class="px-6 py-4">
+                        <div class="flex items-center justify-between mb-3">
+                          <span class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                            Terminals
+                          </span>
+                          <% worktree_terminals =
+                            get_worktree_terminals(@global_terminals, worktree.id) %>
+                          <span class="text-xs text-gray-500 dark:text-gray-500">
+                            {length(worktree_terminals)} active
+                          </span>
+                        </div>
 
-                      <div class="flex items-center gap-2">
-                        <%= if worktree.path do %>
-                          <.link
-                            navigate={~p"/terminal/#{worktree.id}"}
-                            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        <%= if worktree_terminals == [] do %>
+                          <div class="flex flex-col items-center justify-center py-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                            <.icon name="hero-command-line" class="w-6 h-6 text-gray-400 mb-2" />
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                              No active terminals
+                            </p>
+                            <button
+                              phx-click="create_terminal"
+                              phx-value-worktree_id={worktree.id}
+                              class="inline-flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+                            >
+                              <.icon name="hero-plus" class="w-4 h-4 mr-2" /> Create Terminal
+                            </button>
+                          </div>
+                        <% else %>
+                          <div class="grid grid-cols-1 gap-2 mb-3">
+                            <%= for terminal <- worktree_terminals do %>
+                              <div class="group flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
+                                <.link
+                                  navigate={~p"/terminal/#{worktree.id}?terminal_id=#{terminal.id}"}
+                                  class="flex items-center flex-1 min-w-0 cursor-pointer"
+                                >
+                                  <span class={[
+                                    "inline-block w-2 h-2 rounded-full mr-3 flex-shrink-0",
+                                    (terminal.connected && "bg-emerald-500 animate-pulse") ||
+                                      "bg-gray-400"
+                                  ]}>
+                                  </span>
+                                  <.icon
+                                    name="hero-command-line"
+                                    class="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400 flex-shrink-0"
+                                  />
+                                  <span class="font-medium text-gray-800 dark:text-gray-200 truncate">
+                                    {terminal.name}
+                                  </span>
+                                  <span class="ml-auto text-xs text-gray-500 dark:text-gray-400 pl-2">
+                                    {(terminal.connected && "Connected") || "Disconnected"}
+                                  </span>
+                                </.link>
+                                <.icon
+                                  name="hero-arrow-right"
+                                  class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2"
+                                />
+                              </div>
+                            <% end %>
+                          </div>
+                          <button
+                            phx-click="create_terminal"
+                            phx-value-worktree_id={worktree.id}
+                            class="w-full inline-flex items-center justify-center px-3 py-2 text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-all duration-200 cursor-pointer"
                           >
-                            <.icon name="hero-command-line" /> Terminal
-                          </.link>
-                          <.button phx-click="open-in-iterm" phx-value-path={worktree.path}>
-                            <.icon name="hero-command-line" /> iTerm2
-                          </.button>
-                          <.button phx-click="open-in-zed" phx-value-path={worktree.path}>
-                            <.icon name="hero-code-bracket" /> Zed
-                          </.button>
+                            <.icon name="hero-plus" class="w-3 h-3 mr-1.5" /> Add Terminal
+                          </button>
                         <% end %>
-                        <.button
-                          phx-click="delete-worktree"
-                          phx-value-id={worktree.id}
-                          data-confirm="Are you sure? This will delete the git worktree."
-                        >
-                          <.icon name="hero-trash" />
-                        </.button>
                       </div>
                     </div>
                   </div>
                 <% end %>
 
                 <%= if @worktrees == [] do %>
-                  <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <p>No worktrees yet. Create one to get started!</p>
+                  <div class="flex flex-col items-center justify-center py-16">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center mb-4">
+                      <.icon
+                        name="hero-folder-plus"
+                        class="w-10 h-10 text-gray-500 dark:text-gray-400"
+                      />
+                    </div>
+                    <p class="text-lg font-medium text-gray-600 dark:text-gray-400">
+                      No worktrees yet
+                    </p>
+                    <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                      Create one to get started!
+                    </p>
                   </div>
                 <% end %>
               </div>
             </div>
           </div>
         <% else %>
-          <div class="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+          <div class="h-full flex items-center justify-center">
             <div class="text-center">
-              <.icon
-                name="hero-folder"
-                class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600"
-              />
-              <p class="text-lg">Select a repository to create worktrees</p>
+              <div class="w-24 h-24 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center mx-auto mb-6">
+                <.icon name="hero-folder" class="w-12 h-12 text-gray-500 dark:text-gray-400" />
+              </div>
+              <p class="text-xl font-medium text-gray-600 dark:text-gray-400">Select a repository</p>
+              <p class="text-sm text-gray-500 dark:text-gray-500 mt-2">
+                Choose a repository from the sidebar to manage worktrees
+              </p>
             </div>
           </div>
         <% end %>
@@ -1188,7 +1308,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
   def handle_event("remove-repository", %{"id" => repo_id}, socket) do
     case Ash.destroy(Ash.get!(ClaudeLive.Claude.Repository, repo_id)) do
       :ok ->
-        repositories = Ash.read!(ClaudeLive.Claude.Repository)
+        repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
 
         selected_repository =
           if socket.assigns.selected_repository &&
