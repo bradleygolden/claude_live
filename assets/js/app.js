@@ -23,13 +23,55 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/claude_live"
-import topbar from "../vendor/topbar"
+import topbar from "topbar"
+import { TerminalManager } from "./terminal"
+
+// Terminal Hook
+const TerminalHook = {
+  mounted() {
+    this.terminalManager = new TerminalManager()
+    this.terminalManager.setEventHandler(this.pushEvent.bind(this))
+    
+    // Handle server events
+    this.handleEvent("terminal_output", ({ data, terminal_id }) => {
+      this.terminalManager.writeToTerminal(terminal_id, data)
+    })
+    
+    this.handleEvent("terminal_exit", ({ terminal_id }) => {
+      this.terminalManager.handleTerminalExit(terminal_id)
+    })
+    
+    this.handleEvent("terminal_closed", ({ terminal_id }) => {
+      this.terminalManager.handleTerminalClosed(terminal_id)
+    })
+    
+    this.handleEvent("switch_terminal", ({ terminal_id }) => {
+      this.terminalManager.switchTerminal(terminal_id)
+    })
+    
+    // Initialize first terminal if one exists
+    const firstTerminal = this.el.querySelector('[data-terminal-id]')
+    if (firstTerminal) {
+      const terminalId = firstTerminal.dataset.terminalId
+      setTimeout(() => this.terminalManager.switchTerminal(terminalId), 100)
+    }
+  },
+  
+  destroyed() {
+    if (this.terminalManager) {
+      this.terminalManager.destroy()
+    }
+  }
+}
+
+// Combine hooks
+const hooks = { ...colocatedHooks, TerminalHook }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: colocatedHooks,
+  hooks: hooks,
 })
 
 // Show progress bar on live navigation and form submits

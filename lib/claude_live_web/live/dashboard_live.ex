@@ -950,21 +950,51 @@ defmodule ClaudeLiveWeb.DashboardLive do
                           {worktree.path || "Creating..."}
                         </p>
                         
-    <!-- Sessions for this worktree -->
+    <!-- Terminals for this worktree -->
                         <div class="mt-3">
-                          <%= if worktree.sessions == [] do %>
-                            <p class="text-sm text-gray-400 dark:text-gray-500">No active sessions</p>
+                          <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Terminals
+                            </span>
+                            <button
+                              phx-click="create_terminal"
+                              phx-value-worktree_id={worktree.id}
+                              class="inline-flex items-center px-2 py-1 text-xs font-medium text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 border border-green-300 dark:border-green-600 rounded hover:bg-green-50 dark:hover:bg-green-900/50"
+                              title="Create new terminal"
+                            >
+                              <.icon name="hero-plus" class="w-3 h-3 mr-1" /> New Terminal
+                            </button>
+                          </div>
+                          <% worktree_terminals =
+                            get_worktree_terminals(@global_terminals, worktree.id) %>
+                          <%= if worktree_terminals == [] do %>
+                            <p class="text-sm text-gray-400 dark:text-gray-500">
+                              No active terminals
+                            </p>
                           <% else %>
                             <div class="space-y-2">
-                              <%= for session <- worktree.sessions do %>
-                                <div class="flex items-center text-sm">
-                                  <span class={[
-                                    "inline-block w-2 h-2 rounded-full mr-2",
-                                    session.status == :active && "bg-green-500",
-                                    session.status == :inactive && "bg-gray-400"
-                                  ]}>
-                                  </span>
-                                  Session {String.slice(to_string(session.id), 0..7)}
+                              <%= for terminal <- worktree_terminals do %>
+                                <div class="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-700 rounded p-2">
+                                  <div class="flex items-center">
+                                    <span class={[
+                                      "inline-block w-2 h-2 rounded-full mr-2",
+                                      (terminal.connected && "bg-green-500") || "bg-gray-400"
+                                    ]}>
+                                    </span>
+                                    <.icon
+                                      name="hero-command-line"
+                                      class="w-3 h-3 mr-1 text-gray-500"
+                                    />
+                                    <span class="text-gray-700 dark:text-gray-300">
+                                      {terminal.name}
+                                    </span>
+                                  </div>
+                                  <.link
+                                    navigate={~p"/terminal/#{worktree.id}?terminal_id=#{terminal.id}"}
+                                    class="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/50"
+                                  >
+                                    <.icon name="hero-play" class="w-3 h-3 mr-1" /> Open
+                                  </.link>
                                 </div>
                               <% end %>
                             </div>
@@ -1104,8 +1134,6 @@ defmodule ClaudeLiveWeb.DashboardLive do
   end
 
   def handle_event("open-in-iterm", %{"path" => path}, socket) do
-    # Generate the iTerm2 URL scheme
-    # This URL will open iTerm2, cd to the path, and run claude code
     encoded_path = URI.encode(path)
     command = URI.encode("cd #{path} && claude code")
     iterm_url = "iterm2://app/command?d=#{encoded_path}&c=#{command}"
@@ -1117,14 +1145,11 @@ defmodule ClaudeLiveWeb.DashboardLive do
   end
 
   def handle_event("open-in-zed", %{"path" => path}, socket) do
-    # Use Zed's command line interface to open the directory
-    # This will open Zed with the worktree directory
     case System.cmd("zed", [path], stderr_to_stdout: true) do
       {_output, 0} ->
         {:noreply, put_flash(socket, :info, "Opening in Zed...")}
 
       {_output, _status} ->
-        # Fallback to using the zed:// URL scheme if available
         zed_url = "zed://file/#{URI.encode(path)}"
 
         {:noreply,
@@ -1134,12 +1159,37 @@ defmodule ClaudeLiveWeb.DashboardLive do
     end
   end
 
+  def handle_event("create_terminal", %{"worktree_id" => worktree_id}, socket) do
+    terminal_number = find_next_terminal_number(socket.assigns.global_terminals, worktree_id)
+    terminal_id = "#{worktree_id}-#{terminal_number}"
+    session_id = "terminal-#{worktree_id}-#{terminal_number}"
+    worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, load: :repository)
+
+    terminal = %{
+      id: terminal_id,
+      worktree_id: worktree_id,
+      worktree_branch: worktree.branch,
+      worktree_path: worktree.path,
+      repository_id: worktree.repository_id,
+      session_id: session_id,
+      connected: false,
+      terminal_data: "",
+      name: "Terminal #{terminal_number}"
+    }
+
+    ClaudeLive.TerminalManager.upsert_terminal(terminal_id, terminal)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Terminal created. Go to Terminal view to connect.")
+     |> push_navigate(to: ~p"/terminal/#{worktree_id}?terminal_id=#{terminal_id}")}
+  end
+
   def handle_event("remove-repository", %{"id" => repo_id}, socket) do
     case Ash.destroy(Ash.get!(ClaudeLive.Claude.Repository, repo_id)) do
       :ok ->
         repositories = Ash.read!(ClaudeLive.Claude.Repository)
 
-        # If the removed repository was selected, clear the selection
         selected_repository =
           if socket.assigns.selected_repository &&
                socket.assigns.selected_repository.id == repo_id do
@@ -1167,8 +1217,47 @@ defmodule ClaudeLiveWeb.DashboardLive do
     |> Map.get(:worktrees, [])
   end
 
+  defp get_worktree_terminals(global_terminals, worktree_id) do
+    global_terminals
+    |> Map.values()
+    |> Enum.filter(fn terminal -> terminal.worktree_id == worktree_id end)
+    |> Enum.sort_by(& &1.name)
+  end
+
   defp generate_branch_name do
-    # Pick a random city and make it lowercase
     Enum.random(@us_cities) |> String.downcase()
   end
+
+  defp find_next_terminal_number(terminals, worktree_id) do
+    existing_numbers =
+      terminals
+      |> Enum.filter(fn {_id, terminal} -> terminal.worktree_id == worktree_id end)
+      |> Enum.map(fn {terminal_id, _terminal} ->
+        case String.split(terminal_id, "-") do
+          parts when length(parts) >= 2 ->
+            case Integer.parse(List.last(parts)) do
+              {num, ""} -> num
+              _ -> nil
+            end
+
+          _ ->
+            nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort()
+
+    case existing_numbers do
+      [] -> 1
+      numbers -> find_first_gap(numbers, 1)
+    end
+  end
+
+  defp find_first_gap([], current), do: current
+
+  defp find_first_gap([num | rest], current) when num == current do
+    find_first_gap(rest, current + 1)
+  end
+
+  defp find_first_gap([_num | _rest], current), do: current
 end

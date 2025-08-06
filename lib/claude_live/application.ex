@@ -19,6 +19,7 @@ defmodule ClaudeLive.Application do
       {Phoenix.PubSub, name: ClaudeLive.PubSub},
       {Registry, keys: :unique, name: ClaudeLive.Terminal.Registry},
       ClaudeLive.Terminal.Supervisor,
+      ClaudeLive.TerminalManager,
       ClaudeLiveWeb.Endpoint
     ]
 

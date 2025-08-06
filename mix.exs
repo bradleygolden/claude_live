@@ -69,24 +69,23 @@ defmodule ClaudeLive.MixProject do
 
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build", "terminal.setup"],
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ash.setup --quiet", "test"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind claude_live", "esbuild claude_live"],
-      "assets.vendor": [
-        "cmd mkdir -p priv/static/assets/vendor",
-        "cmd cp -r assets/vendor/* priv/static/assets/vendor/"
+      "assets.setup": [
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing",
+        "cmd --cd assets npm ci"
       ],
+      "assets.build": ["cmd --cd assets npm ci", "tailwind claude_live", "esbuild claude_live"],
       "assets.deploy": [
+        "cmd --cd assets npm ci",
         "tailwind claude_live --minify",
         "esbuild claude_live --minify",
-        "assets.vendor",
         "phx.digest"
       ],
-      "ash.setup": ["ash.setup", "run priv/repo/seeds.exs"],
-      "terminal.setup": ["cmd --cd priv/terminal npm install"]
+      "ash.setup": ["ash.setup", "run priv/repo/seeds.exs"]
     ]
   end
 end

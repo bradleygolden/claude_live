@@ -17,12 +17,14 @@ defmodule ClaudeLiveWeb.Router do
   scope "/", ClaudeLiveWeb do
     pipe_through :browser
 
-    live "/", DashboardLive, :index
-    live "/dashboard/:repo_id", DashboardLive, :show
-
-    live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
-
-    live "/terminal/:worktree_id", TerminalLive, :index
+    # LiveViews with global terminal state management
+    live_session :terminal_session,
+      on_mount: {ClaudeLiveWeb.TerminalStateHook, :default} do
+      live "/", DashboardLive, :index
+      live "/dashboard/:repo_id", DashboardLive, :show
+      live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
+      live "/terminal/:worktree_id", TerminalLive, :index
+    end
   end
 
   if Application.compile_env(:claude_live, :dev_routes) do
