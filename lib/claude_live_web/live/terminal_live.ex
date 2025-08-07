@@ -70,7 +70,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
         )
     end
 
-    # Update terminal status
     updated_terminal = Map.put(terminal, :connected, true)
     ClaudeLive.TerminalManager.upsert_terminal(socket.assigns.terminal_id, updated_terminal)
 
@@ -243,6 +242,26 @@ defmodule ClaudeLiveWeb.TerminalLive do
     :ok
   end
 
+  defp get_dashboard_link(terminal) do
+    if terminal.worktree_id do
+      case get_repository_id(terminal.worktree_id) do
+        {:ok, repo_id} -> ~p"/dashboard/#{repo_id}"
+        _ -> ~p"/"
+      end
+    else
+      ~p"/"
+    end
+  end
+
+  defp get_repository_id(worktree_id) do
+    try do
+      worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, load: :repository)
+      {:ok, worktree.repository_id}
+    rescue
+      _ -> {:error, :not_found}
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -336,7 +355,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     <!-- Bottom navigation -->
         <div class="border-t border-gray-800/50 p-4">
           <.link
-            navigate={~p"/"}
+            navigate={get_dashboard_link(@terminal)}
             class="flex items-center justify-center text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg px-4 py-2 transition-all duration-200"
           >
             <.icon name="hero-arrow-left" class="w-4 h-4" />
