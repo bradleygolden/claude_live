@@ -16,25 +16,30 @@ defmodule ClaudeLive.Config.Helpers do
   end
 
   defp default_database_path(env) do
-    # Use System.find_executable to leverage Elixir's built-in path handling
-    # Start from the current file's directory
     project_root = find_project_root(__DIR__)
-
-    # Build the database path
     Path.join([project_root, "db", "claude_live_#{env}.db"])
   end
 
   defp find_project_root(path) do
-    # Expand to absolute path
     abs_path = Path.expand(path)
-    mix_file = Path.join(abs_path, "mix.exs")
+
+    if String.contains?(abs_path, "/repo/") do
+      abs_path
+      |> String.split("/repo/")
+      |> List.first()
+    else
+      find_mix_root(abs_path)
+    end
+  end
+
+  defp find_mix_root(path) do
+    mix_file = Path.join(path, "mix.exs")
 
     cond do
       File.exists?(mix_file) ->
-        abs_path
+        path
 
-      # Check if we're at the filesystem root
-      Path.dirname(abs_path) == abs_path ->
+      Path.dirname(path) == path ->
         raise """
         Could not find project root (no mix.exs found).
         Started searching from: #{path}
@@ -43,8 +48,7 @@ defmodule ClaudeLive.Config.Helpers do
         """
 
       true ->
-        # Go up one directory and continue searching
-        find_project_root(Path.dirname(abs_path))
+        find_mix_root(Path.dirname(path))
     end
   end
 end
