@@ -403,35 +403,57 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   />
                 </svg>
               </button>
+              <.link
+                navigate={~p"/git-diff/terminal-#{@terminal_id}"}
+                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors"
+                title="View git diffs"
+              >
+                <svg
+                  class="w-4 h-4 text-gray-400 hover:text-gray-200"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                  />
+                </svg>
+              </.link>
             </div>
           </div>
-          <div class="flex items-center space-x-2">
-            <span class={[
-              "inline-block w-2 h-2 rounded-full",
-              (@terminal.connected &&
-                 "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
-            ]}>
-            </span>
-            <span class={[
-              "text-sm font-medium",
-              (@terminal.connected && "text-emerald-400") || "text-red-400"
-            ]}>
-              {if @terminal.connected, do: "Connected", else: "Disconnected"}
-            </span>
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+              <span class={[
+                "inline-block w-2 h-2 rounded-full",
+                (@terminal.connected &&
+                   "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
+              ]}>
+              </span>
+              <span class={[
+                "text-sm font-medium",
+                (@terminal.connected && "text-emerald-400") || "text-red-400"
+              ]}>
+                {if @terminal.connected, do: "Connected", else: "Disconnected"}
+              </span>
+            </div>
           </div>
         </div>
-        
-    <!-- Terminal Container -->
-        <div
-          class="flex-1 relative bg-black"
-          phx-hook="SingleTerminalHook"
-          id="terminal-area"
-          data-terminal-id={@terminal_id}
-          data-session-id={@session_id}
-        >
-          <div id="terminals-container" phx-update="ignore">
-            <div id={"terminal-container-#{@terminal_id}"} class="terminal-container absolute inset-0">
-              <div id={"terminal-#{@terminal_id}"} class="h-full w-full"></div>
+
+        <div class="flex-1 relative bg-black">
+          <div
+            phx-hook="SingleTerminalHook"
+            id="terminal-area"
+            data-terminal-id={@terminal_id}
+            data-session-id={@session_id}
+            class="h-full w-full"
+          >
+            <div id="terminals-container" phx-update="ignore" class="h-full w-full">
+              <div id={"terminal-container-#{@terminal_id}"} class="h-full w-full">
+                <div id={"terminal-#{@terminal_id}"} class="h-full w-full"></div>
+              </div>
             </div>
           </div>
         </div>

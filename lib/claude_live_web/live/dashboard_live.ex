@@ -839,12 +839,14 @@ defmodule ClaudeLiveWeb.DashboardLive do
     repository = Ash.get!(ClaudeLive.Claude.Repository, repo_id)
     worktrees = load_worktrees(repository)
 
-    {:noreply,
-     socket
-     |> assign(:selected_repository, repository)
-     |> assign(:worktrees, worktrees)
-     |> assign(:show_new_worktree_form, false)
-     |> assign(:new_worktree_form, nil)}
+    socket =
+      socket
+      |> assign(:selected_repository, repository)
+      |> assign(:worktrees, worktrees)
+      |> assign(:show_new_worktree_form, false)
+      |> assign(:new_worktree_form, nil)
+
+    {:noreply, socket}
   end
 
   def handle_params(_params, _uri, socket) do
@@ -1051,6 +1053,25 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                       </path>
                                     </svg>
                                   </button>
+                                  <.link
+                                    navigate={~p"/git-diff/#{worktree.id}?expand=true"}
+                                    class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                                    title="View git diffs"
+                                  >
+                                    <svg
+                                      class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        stroke-width="2"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                                      />
+                                    </svg>
+                                  </.link>
                                   <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
                                   <button
                                     phx-click="delete-worktree"

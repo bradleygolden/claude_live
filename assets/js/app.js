@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/claude_live"
 import topbar from "topbar"
 import { TerminalManager } from "./terminal"
+import { DiffViewerHook } from "./git_diff"
 
 const TerminalHook = {
   mounted() {
@@ -102,7 +103,7 @@ const SingleTerminalHook = {
 }
 
 // Combine hooks
-const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook }
+const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
