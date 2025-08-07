@@ -52,8 +52,11 @@ defmodule ClaudeLive.Claude.Worktree do
 
               {:ok, updated_worktree}
 
-            {:error, reason} ->
+            {:error, reason} when is_binary(reason) ->
               {:error, Ash.Error.Unknown.exception(message: reason)}
+
+            {:error, reason} ->
+              {:error, reason}
           end
         end)
       end
