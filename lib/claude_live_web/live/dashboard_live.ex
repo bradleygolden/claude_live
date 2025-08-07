@@ -1097,16 +1097,33 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                     </svg>
                                   </.link>
                                   <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                                  <% has_terminals =
+                                    length(get_worktree_terminals(@global_terminals, worktree.id)) > 0 %>
                                   <button
                                     phx-click="delete-worktree"
                                     phx-value-id={worktree.id}
-                                    data-confirm="Are you sure? This will delete the git worktree."
-                                    class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
-                                    title="Delete worktree"
+                                    data-confirm={
+                                      unless has_terminals,
+                                        do: "Are you sure? This will delete the git worktree."
+                                    }
+                                    disabled={has_terminals}
+                                    class={[
+                                      "flex items-center justify-center w-8 h-8 rounded-lg transition-colors",
+                                      if has_terminals do
+                                        "opacity-50 cursor-not-allowed bg-gray-50 dark:bg-gray-900"
+                                      else
+                                        "hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
+                                      end
+                                    ]}
+                                    title={
+                                      if has_terminals,
+                                        do: "Close all terminals before deleting",
+                                        else: "Delete worktree"
+                                    }
                                   >
                                     <.icon
                                       name="hero-trash"
-                                      class="w-4 h-4 text-red-500 dark:text-red-400"
+                                      class={"w-4 h-4 #{if has_terminals, do: "text-gray-400 dark:text-gray-600", else: "text-red-500 dark:text-red-400"}"}
                                     />
                                   </button>
                                 </div>
@@ -1298,17 +1315,29 @@ defmodule ClaudeLiveWeb.DashboardLive do
   def handle_event("delete-worktree", %{"id" => id}, socket) do
     worktree = Ash.get!(ClaudeLive.Claude.Worktree, id)
 
-    case Ash.destroy(worktree) do
-      :ok ->
-        worktrees = load_worktrees(socket.assigns.selected_repository)
+    # Check if there are any active terminals for this worktree
+    worktree_terminals = get_worktree_terminals(socket.assigns.global_terminals, id)
 
-        {:noreply,
-         socket
-         |> assign(:worktrees, worktrees)
-         |> put_flash(:info, "Worktree deleted successfully")}
+    if length(worktree_terminals) > 0 do
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "Cannot delete worktree with #{length(worktree_terminals)} active terminal(s). Please close all terminals first."
+       )}
+    else
+      case Ash.destroy(worktree) do
+        :ok ->
+          worktrees = load_worktrees(socket.assigns.selected_repository)
 
-      {:error, _error} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete worktree")}
+          {:noreply,
+           socket
+           |> assign(:worktrees, worktrees)
+           |> put_flash(:info, "Worktree deleted successfully")}
+
+        {:error, _error} ->
+          {:noreply, put_flash(socket, :error, "Failed to delete worktree")}
+      end
     end
   end
 
