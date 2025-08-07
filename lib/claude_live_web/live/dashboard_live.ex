@@ -1127,6 +1127,24 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                     />
                                   </button>
                                 </div>
+                              <% else %>
+                                <div class="flex items-center gap-1">
+                                  <span class="text-xs text-amber-600 dark:text-amber-500 px-2 py-1 bg-amber-50 dark:bg-amber-950/30 rounded">
+                                    Failed to create
+                                  </span>
+                                  <button
+                                    phx-click="delete-worktree"
+                                    phx-value-id={worktree.id}
+                                    data-confirm="Remove this failed worktree?"
+                                    class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                                    title="Remove failed worktree"
+                                  >
+                                    <.icon
+                                      name="hero-trash"
+                                      class="w-4 h-4 text-red-500 dark:text-red-400"
+                                    />
+                                  </button>
+                                </div>
                               <% end %>
                             </div>
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
@@ -1315,29 +1333,48 @@ defmodule ClaudeLiveWeb.DashboardLive do
   def handle_event("delete-worktree", %{"id" => id}, socket) do
     worktree = Ash.get!(ClaudeLive.Claude.Worktree, id)
 
-    # Check if there are any active terminals for this worktree
+    # Allow deletion if worktree has no path (failed creation) or no active terminals
     worktree_terminals = get_worktree_terminals(socket.assigns.global_terminals, id)
 
-    if length(worktree_terminals) > 0 do
-      {:noreply,
-       put_flash(
-         socket,
-         :error,
-         "Cannot delete worktree with #{length(worktree_terminals)} active terminal(s). Please close all terminals first."
-       )}
-    else
-      case Ash.destroy(worktree) do
-        :ok ->
-          worktrees = load_worktrees(socket.assigns.selected_repository)
+    cond do
+      # Failed worktree (no path) - always allow deletion
+      is_nil(worktree.path) ->
+        case Ash.destroy(worktree) do
+          :ok ->
+            worktrees = load_worktrees(socket.assigns.selected_repository)
 
-          {:noreply,
-           socket
-           |> assign(:worktrees, worktrees)
-           |> put_flash(:info, "Worktree deleted successfully")}
+            {:noreply,
+             socket
+             |> assign(:worktrees, worktrees)
+             |> put_flash(:info, "Failed worktree removed successfully")}
 
-        {:error, _error} ->
-          {:noreply, put_flash(socket, :error, "Failed to delete worktree")}
-      end
+          {:error, _error} ->
+            {:noreply, put_flash(socket, :error, "Failed to remove worktree")}
+        end
+
+      # Has active terminals - prevent deletion
+      length(worktree_terminals) > 0 ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Cannot delete worktree with #{length(worktree_terminals)} active terminal(s). Please close all terminals first."
+         )}
+
+      # Normal worktree with no terminals - allow deletion
+      true ->
+        case Ash.destroy(worktree) do
+          :ok ->
+            worktrees = load_worktrees(socket.assigns.selected_repository)
+
+            {:noreply,
+             socket
+             |> assign(:worktrees, worktrees)
+             |> put_flash(:info, "Worktree deleted successfully")}
+
+          {:error, _error} ->
+            {:noreply, put_flash(socket, :error, "Failed to delete worktree")}
+        end
     end
   end
 
