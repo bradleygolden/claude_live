@@ -1233,10 +1233,14 @@ defmodule ClaudeLiveWeb.DashboardLive do
                                       {(terminal.connected && "Connected") || "Disconnected"}
                                     </span>
                                   </.link>
-                                  <.icon
-                                    name="hero-arrow-right"
-                                    class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2"
-                                  />
+                                  <button
+                                    phx-click="close-terminal"
+                                    phx-value-terminal-id={terminal.id}
+                                    class="p-1 ml-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all duration-200"
+                                    title="Close terminal"
+                                  >
+                                    <.icon name="hero-x-mark" class="w-4 h-4" />
+                                  </button>
                                 </div>
                               <% end %>
                             </div>
@@ -1447,6 +1451,19 @@ defmodule ClaudeLiveWeb.DashboardLive do
   def handle_event("collapsed-worktrees-loaded", %{"collapsed" => collapsed_list}, socket) do
     collapsed_set = MapSet.new(collapsed_list || [])
     {:noreply, assign(socket, :collapsed_worktrees, collapsed_set)}
+  end
+
+  def handle_event("close-terminal", %{"terminal-id" => terminal_id}, socket) do
+    case ClaudeLive.TerminalManager.delete_terminal(terminal_id) do
+      :ok ->
+        {:noreply,
+         socket
+         |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
+         |> put_flash(:info, "Terminal closed successfully")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Terminal not found")}
+    end
   end
 
   def handle_event("create_terminal", %{"worktree_id" => worktree_id}, socket) do
