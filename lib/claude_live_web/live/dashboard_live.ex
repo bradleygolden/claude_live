@@ -830,6 +830,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
       |> assign(:show_new_worktree_form, false)
       |> assign(:new_worktree_form, nil)
       |> assign(:page_title, "Claude Live Dashboard")
+      |> assign(:collapsed_worktrees, MapSet.new())
 
     {:ok, socket}
   end
@@ -1025,9 +1026,25 @@ defmodule ClaudeLiveWeb.DashboardLive do
                     <div class="p-6 pb-4">
                       <div class="flex items-start justify-between">
                         <div class="flex items-start flex-1">
-                          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0">
-                            <.icon name="hero-code-bracket" class="w-5 h-5 text-white" />
-                          </div>
+                          <button
+                            phx-click="toggle-worktree"
+                            phx-value-worktree-id={worktree.id}
+                            class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0 hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
+                            title={
+                              if MapSet.member?(@collapsed_worktrees, worktree.id),
+                                do: "Expand",
+                                else: "Collapse"
+                            }
+                          >
+                            <.icon
+                              name={
+                                if MapSet.member?(@collapsed_worktrees, worktree.id),
+                                  do: "hero-chevron-right",
+                                  else: "hero-chevron-down"
+                              }
+                              class="w-5 h-5 text-white"
+                            />
+                          </button>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-3">
                               <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -1157,76 +1174,101 @@ defmodule ClaudeLiveWeb.DashboardLive do
                     
     <!-- Terminals for this worktree -->
                     <!-- Terminals Section -->
-                    <div class="border-t border-gray-200/50 dark:border-gray-800">
-                      <div class="px-6 py-4">
-                        <div class="flex items-center justify-between mb-3">
-                          <span class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                            Terminals
-                          </span>
-                          <% worktree_terminals =
-                            get_worktree_terminals(@global_terminals, worktree.id) %>
-                          <span class="text-xs text-gray-500 dark:text-gray-500">
-                            {length(worktree_terminals)} active
-                          </span>
-                        </div>
-
-                        <%= if worktree_terminals == [] do %>
-                          <div class="flex flex-col items-center justify-center py-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                            <.icon name="hero-command-line" class="w-6 h-6 text-gray-400 mb-2" />
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                              No active terminals
-                            </p>
+                    <% worktree_terminals = get_worktree_terminals(@global_terminals, worktree.id) %>
+                    <%= if MapSet.member?(@collapsed_worktrees, worktree.id) do %>
+                      <!-- Collapsed state - show terminal count -->
+                      <div class="border-t border-gray-200/50 dark:border-gray-800 px-6 py-3">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center gap-2">
+                            <.icon
+                              name="hero-command-line"
+                              class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                            />
+                            <span class="text-sm text-gray-600 dark:text-gray-400">
+                              {length(worktree_terminals)} terminal(s)
+                            </span>
+                          </div>
+                          <%= if worktree_terminals == [] do %>
                             <button
                               phx-click="create_terminal"
                               phx-value-worktree_id={worktree.id}
-                              class="inline-flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+                              class="inline-flex items-center px-3 py-1 text-xs font-medium bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg transition-all duration-200"
                             >
-                              <.icon name="hero-plus" class="w-4 h-4" />
-                              <span class="ml-2">Create Terminal</span>
+                              <.icon name="hero-plus" class="w-3 h-3 mr-1" /> Create
                             </button>
-                          </div>
-                        <% else %>
-                          <div class="grid grid-cols-1 gap-2 mb-3">
-                            <%= for terminal <- worktree_terminals do %>
-                              <div class="group flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
-                                <.link
-                                  navigate={~p"/terminals/#{terminal.id}"}
-                                  class="flex items-center flex-1 min-w-0 cursor-pointer"
-                                >
-                                  <span class={[
-                                    "inline-block w-2 h-2 rounded-full mr-3 flex-shrink-0",
-                                    (terminal.connected && "bg-emerald-500 animate-pulse") ||
-                                      "bg-gray-400"
-                                  ]}>
-                                  </span>
-                                  <.icon
-                                    name="hero-command-line"
-                                    class="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400 flex-shrink-0"
-                                  />
-                                  <span class="font-medium text-gray-800 dark:text-gray-200 truncate">
-                                    {terminal.name}
-                                  </span>
-                                  <span class="ml-auto text-xs text-gray-500 dark:text-gray-400 pl-2">
-                                    {(terminal.connected && "Connected") || "Disconnected"}
-                                  </span>
-                                </.link>
-                                <.icon
-                                  name="hero-arrow-right"
-                                  class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2"
-                                />
-                              </div>
-                            <% end %>
-                          </div>
-                          <button
-                            phx-click="create_terminal"
-                            phx-value-worktree_id={worktree.id}
-                            class="w-full inline-flex items-center justify-center px-3 py-2 text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-all duration-200 cursor-pointer"
-                          >
-                            <.icon name="hero-plus" class="w-3 h-3 mr-1.5" /> Add Terminal
-                          </button>
-                        <% end %>
+                          <% end %>
+                        </div>
                       </div>
-                    </div>
+                    <% else %>
+                      <div class="border-t border-gray-200/50 dark:border-gray-800">
+                        <div class="px-6 py-4">
+                          <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                              Terminals
+                            </span>
+                            <span class="text-xs text-gray-500 dark:text-gray-500">
+                              {length(worktree_terminals)} active
+                            </span>
+                          </div>
+
+                          <%= if worktree_terminals == [] do %>
+                            <div class="flex flex-col items-center justify-center py-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                              <.icon name="hero-command-line" class="w-6 h-6 text-gray-400 mb-2" />
+                              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                                No active terminals
+                              </p>
+                              <button
+                                phx-click="create_terminal"
+                                phx-value-worktree_id={worktree.id}
+                                class="inline-flex items-center px-4 py-2 text-sm font-medium bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer"
+                              >
+                                <.icon name="hero-plus" class="w-4 h-4" />
+                                <span class="ml-2">Create Terminal</span>
+                              </button>
+                            </div>
+                          <% else %>
+                            <div class="grid grid-cols-1 gap-2 mb-3">
+                              <%= for terminal <- worktree_terminals do %>
+                                <div class="group flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200">
+                                  <.link
+                                    navigate={~p"/terminals/#{terminal.id}"}
+                                    class="flex items-center flex-1 min-w-0 cursor-pointer"
+                                  >
+                                    <span class={[
+                                      "inline-block w-2 h-2 rounded-full mr-3 flex-shrink-0",
+                                      (terminal.connected && "bg-emerald-500 animate-pulse") ||
+                                        "bg-gray-400"
+                                    ]}>
+                                    </span>
+                                    <.icon
+                                      name="hero-command-line"
+                                      class="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400 flex-shrink-0"
+                                    />
+                                    <span class="font-medium text-gray-800 dark:text-gray-200 truncate">
+                                      {terminal.name}
+                                    </span>
+                                    <span class="ml-auto text-xs text-gray-500 dark:text-gray-400 pl-2">
+                                      {(terminal.connected && "Connected") || "Disconnected"}
+                                    </span>
+                                  </.link>
+                                  <.icon
+                                    name="hero-arrow-right"
+                                    class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2"
+                                  />
+                                </div>
+                              <% end %>
+                            </div>
+                            <button
+                              phx-click="create_terminal"
+                              phx-value-worktree_id={worktree.id}
+                              class="w-full inline-flex items-center justify-center px-3 py-2 text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-all duration-200 cursor-pointer"
+                            >
+                              <.icon name="hero-plus" class="w-3 h-3 mr-1.5" /> Add Terminal
+                            </button>
+                          <% end %>
+                        </div>
+                      </div>
+                    <% end %>
                   </div>
                 <% end %>
 
@@ -1402,6 +1444,19 @@ defmodule ClaudeLiveWeb.DashboardLive do
          |> push_event("open-url", %{url: zed_url})
          |> put_flash(:info, "Opening in Zed...")}
     end
+  end
+
+  def handle_event("toggle-worktree", %{"worktree-id" => worktree_id}, socket) do
+    collapsed_worktrees = socket.assigns.collapsed_worktrees
+
+    updated_collapsed =
+      if MapSet.member?(collapsed_worktrees, worktree_id) do
+        MapSet.delete(collapsed_worktrees, worktree_id)
+      else
+        MapSet.put(collapsed_worktrees, worktree_id)
+      end
+
+    {:noreply, assign(socket, :collapsed_worktrees, updated_collapsed)}
   end
 
   def handle_event("create_terminal", %{"worktree_id" => worktree_id}, socket) do
