@@ -113,7 +113,27 @@ const SidebarState = {
   }
 }
 
-const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook, SidebarState }
+const DashboardHooks = {
+  mounted() {
+    // Handle load request from server
+    this.handleEvent('load-collapsed-worktrees', () => {
+      const collapsedWorktrees = JSON.parse(localStorage.getItem('collapsed_worktrees') || '[]')
+      this.pushEvent('collapsed-worktrees-loaded', { collapsed: collapsedWorktrees })
+    })
+    
+    // Store collapsed worktrees to localStorage
+    this.handleEvent('store-collapsed-worktrees', ({ collapsed }) => {
+      localStorage.setItem('collapsed_worktrees', JSON.stringify(collapsed))
+    })
+    
+    // Handle open URL events
+    this.handleEvent('open-url', ({ url }) => {
+      window.open(url, '_blank')
+    })
+  }
+}
+
+const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook, SidebarState, DashboardHooks }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

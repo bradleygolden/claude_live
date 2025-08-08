@@ -831,6 +831,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
       |> assign(:new_worktree_form, nil)
       |> assign(:page_title, "Claude Live Dashboard")
       |> assign(:collapsed_worktrees, MapSet.new())
+      |> push_event("load-collapsed-worktrees", %{})
 
     {:ok, socket}
   end
@@ -860,7 +861,7 @@ defmodule ClaudeLiveWeb.DashboardLive do
     <div
       class="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950"
       id="dashboard"
-      phx-hook=".OpenUrl"
+      phx-hook="DashboardHooks"
     >
       <!-- Sidebar -->
       <div class="w-72 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-xl border-r border-gray-200/50 dark:border-gray-800 flex flex-col">
@@ -1437,7 +1438,15 @@ defmodule ClaudeLiveWeb.DashboardLive do
         MapSet.put(collapsed_worktrees, worktree_id)
       end
 
-    {:noreply, assign(socket, :collapsed_worktrees, updated_collapsed)}
+    {:noreply,
+     socket
+     |> assign(:collapsed_worktrees, updated_collapsed)
+     |> push_event("store-collapsed-worktrees", %{collapsed: MapSet.to_list(updated_collapsed)})}
+  end
+
+  def handle_event("collapsed-worktrees-loaded", %{"collapsed" => collapsed_list}, socket) do
+    collapsed_set = MapSet.new(collapsed_list || [])
+    {:noreply, assign(socket, :collapsed_worktrees, collapsed_set)}
   end
 
   def handle_event("create_terminal", %{"worktree_id" => worktree_id}, socket) do
