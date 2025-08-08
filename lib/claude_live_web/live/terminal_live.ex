@@ -431,9 +431,9 @@ defmodule ClaudeLiveWeb.TerminalLive do
                 ]}>
                   <.link
                     navigate={~p"/terminals/#{tid}"}
-                    class="flex-1 block pl-4 pr-2 py-3 transition-all duration-200 rounded-l-lg"
+                    class="flex-1 block pl-4 py-3 transition-all duration-200 rounded-l-lg overflow-hidden"
                   >
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-3 pr-2">
                       <div class={[
                         "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
                         (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
@@ -441,7 +441,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                       ]}>
                         <.icon name="hero-command-line" class="w-5 h-5 text-white" />
                       </div>
-                      <div class="flex-1 min-w-0">
+                      <div class="flex-1 min-w-0 overflow-hidden">
                         <div class={[
                           "text-sm font-bold truncate",
                           (terminal.connected && "text-white") || "text-gray-300"
@@ -473,7 +473,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   <button
                     phx-click="close-terminal"
                     phx-value-terminal-id={tid}
-                    class="p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
+                    class="flex-shrink-0 p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
                     title="Close terminal"
                   >
                     <.icon name="hero-x-mark" class="w-4 h-4" />
