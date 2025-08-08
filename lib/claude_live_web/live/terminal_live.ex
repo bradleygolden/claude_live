@@ -21,6 +21,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:subscribed, false)
         |> assign(:page_title, "Terminal - #{terminal.name}")
         |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
+        |> assign(:sidebar_collapsed, false)
+        |> push_event("load-sidebar-state", %{})
 
       {:ok, socket}
     else
@@ -158,6 +160,19 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
+  def handle_event("toggle-sidebar", _params, socket) do
+    new_state = !socket.assigns.sidebar_collapsed
+
+    {:noreply,
+     socket
+     |> assign(:sidebar_collapsed, new_state)
+     |> push_event("store-sidebar-state", %{collapsed: new_state})}
+  end
+
+  def handle_event("sidebar-state-loaded", %{"collapsed" => collapsed}, socket) do
+    {:noreply, assign(socket, :sidebar_collapsed, collapsed)}
+  end
+
   @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     if session_id == socket.assigns.session_id do
@@ -265,81 +280,147 @@ defmodule ClaudeLiveWeb.TerminalLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex">
+    <div
+      id="terminal-container"
+      class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex"
+      phx-hook="SidebarState"
+    >
       <!-- Sidebar with terminals list -->
       <div class={[
-        "bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out",
-        "w-72"
+        "bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
+        if @sidebar_collapsed do
+          "w-14"
+        else
+          "w-72"
+        end
       ]}>
         <!-- Header -->
         <div class="border-b border-gray-800/50">
-          <div class="p-6">
-            <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
-              All Terminals
-            </h3>
-            <p class="text-xs text-gray-500 mt-2">
-              {map_size(@global_terminals)} active terminal(s)
-            </p>
+          <div class={[
+            "transition-all duration-300",
+            if @sidebar_collapsed do
+              "p-3"
+            else
+              "p-6"
+            end
+          ]}>
+            <div class="flex items-center justify-between">
+              <%= unless @sidebar_collapsed do %>
+                <div>
+                  <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
+                    All Terminals
+                  </h3>
+                  <p class="text-xs text-gray-500 mt-2">
+                    {map_size(@global_terminals)} active terminal(s)
+                  </p>
+                </div>
+              <% end %>
+              <button
+                phx-click="toggle-sidebar"
+                class={[
+                  "flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors text-gray-400 hover:text-gray-200",
+                  if @sidebar_collapsed do
+                    "mx-auto"
+                  else
+                    "flex-shrink-0"
+                  end
+                ]}
+                title={if @sidebar_collapsed, do: "Expand sidebar", else: "Collapse sidebar"}
+              >
+                <.icon
+                  name={if @sidebar_collapsed, do: "hero-chevron-right", else: "hero-chevron-left"}
+                  class="w-4 h-4"
+                />
+              </button>
+            </div>
           </div>
         </div>
         
     <!-- Terminals List -->
-        <div class="flex-1 overflow-y-auto py-2">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
           <%= if map_size(@global_terminals) > 0 do %>
-            <%= for {tid, terminal} <- @global_terminals do %>
-              <div class={[
-                "mx-2 mb-1 rounded-lg group relative transition-all duration-200 flex items-center",
-                tid == @terminal_id &&
-                  "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20",
-                tid != @terminal_id && "hover:bg-gray-800/50"
-              ]}>
-                <.link
-                  navigate={~p"/terminals/#{tid}"}
-                  class="flex-1 block pl-4 pr-2 py-3 transition-all duration-200 rounded-l-lg"
-                >
-                  <div class="flex items-center space-x-3">
-                    <div class={[
-                      "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                      (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
-                        "bg-gradient-to-br from-gray-600 to-gray-700"
-                    ]}>
-                      <.icon name="hero-command-line" class="w-5 h-5 text-white" />
+            <%= if @sidebar_collapsed do %>
+              <!-- Collapsed view - only show icons -->
+              <%= for {tid, terminal} <- @global_terminals do %>
+                <div class="mx-2 mb-1 flex justify-center">
+                  <.link
+                    navigate={~p"/terminals/#{tid}"}
+                    class={[
+                      "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 group relative",
+                      tid == @terminal_id &&
+                        "bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-950/20",
+                      (tid != @terminal_id &&
+                         (terminal.connected && "bg-gradient-to-br from-emerald-600 to-green-700")) ||
+                        "bg-gradient-to-br from-gray-600 to-gray-700",
+                      "hover:scale-105"
+                    ]}
+                    title={terminal.name}
+                  >
+                    <.icon name="hero-command-line" class="w-4 h-4 text-white" />
+                    <!-- Tooltip on hover -->
+                    <div class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                      {terminal.name} - {terminal.worktree_branch}
                     </div>
-                    <div class="flex-1 min-w-0">
+                  </.link>
+                </div>
+              <% end %>
+            <% else %>
+              <!-- Expanded view - full details -->
+              <%= for {tid, terminal} <- @global_terminals do %>
+                <div class={[
+                  "mx-2 mb-1 rounded-lg group relative transition-all duration-200 flex items-center",
+                  tid == @terminal_id &&
+                    "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20",
+                  tid != @terminal_id && "hover:bg-gray-800/50"
+                ]}>
+                  <.link
+                    navigate={~p"/terminals/#{tid}"}
+                    class="flex-1 block pl-4 pr-2 py-3 transition-all duration-200 rounded-l-lg"
+                  >
+                    <div class="flex items-center space-x-3">
                       <div class={[
-                        "text-sm font-semibold truncate",
-                        (terminal.connected && "text-gray-100") || "text-gray-400"
+                        "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
+                        (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                          "bg-gradient-to-br from-gray-600 to-gray-700"
                       ]}>
-                        {terminal.name}
+                        <.icon name="hero-command-line" class="w-5 h-5 text-white" />
                       </div>
-                      <div class="text-xs text-gray-500 truncate mt-0.5">
-                        {terminal.worktree_branch}
-                      </div>
-                      <div class="flex items-center gap-1 mt-1">
-                        <span class={[
-                          "w-1.5 h-1.5 rounded-full",
-                          (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                      <div class="flex-1 min-w-0">
+                        <div class={[
+                          "text-sm font-semibold truncate",
+                          (terminal.connected && "text-gray-100") || "text-gray-400"
                         ]}>
-                        </span>
-                        <span class={[
-                          "text-xs",
-                          (terminal.connected && "text-emerald-400") || "text-gray-500"
-                        ]}>
-                          {(terminal.connected && "Connected") || "Disconnected"}
-                        </span>
+                          {terminal.name}
+                        </div>
+                        <div class="text-xs text-gray-500 truncate mt-0.5">
+                          {terminal.worktree_branch}
+                        </div>
+                        <div class="flex items-center gap-1 mt-1">
+                          <span class={[
+                            "w-1.5 h-1.5 rounded-full",
+                            (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                          ]}>
+                          </span>
+                          <span class={[
+                            "text-xs",
+                            (terminal.connected && "text-emerald-400") || "text-gray-500"
+                          ]}>
+                            {(terminal.connected && "Connected") || "Disconnected"}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </.link>
-                <button
-                  phx-click="close-terminal"
-                  phx-value-terminal-id={tid}
-                  class="p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
-                  title="Close terminal"
-                >
-                  <.icon name="hero-x-mark" class="w-4 h-4" />
-                </button>
-              </div>
+                  </.link>
+                  <button
+                    phx-click="close-terminal"
+                    phx-value-terminal-id={tid}
+                    class="p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
+                    title="Close terminal"
+                  >
+                    <.icon name="hero-x-mark" class="w-4 h-4" />
+                  </button>
+                </div>
+              <% end %>
             <% end %>
           <% else %>
             <div class="px-4 py-12 text-center">
@@ -354,13 +435,23 @@ defmodule ClaudeLiveWeb.TerminalLive do
         
     <!-- Bottom navigation -->
         <div class="border-t border-gray-800/50 p-4">
-          <.link
-            navigate={get_dashboard_link(@terminal)}
-            class="flex items-center justify-center text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg px-4 py-2 transition-all duration-200"
-          >
-            <.icon name="hero-arrow-left" class="w-4 h-4" />
-            <span class="ml-2">Dashboard</span>
-          </.link>
+          <%= if @sidebar_collapsed do %>
+            <.link
+              navigate={get_dashboard_link(@terminal)}
+              class="flex items-center justify-center w-8 h-8 mx-auto rounded-lg bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 transition-all duration-200"
+              title="Back to Dashboard"
+            >
+              <.icon name="hero-arrow-left" class="w-4 h-4" />
+            </.link>
+          <% else %>
+            <.link
+              navigate={get_dashboard_link(@terminal)}
+              class="flex items-center justify-center text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg px-4 py-2 transition-all duration-200"
+            >
+              <.icon name="hero-arrow-left" class="w-4 h-4" />
+              <span class="ml-2">Dashboard</span>
+            </.link>
+          <% end %>
         </div>
       </div>
       

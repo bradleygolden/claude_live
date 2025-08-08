@@ -102,8 +102,18 @@ const SingleTerminalHook = {
   }
 }
 
-// Combine hooks
-const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook }
+const SidebarState = {
+  mounted() {
+    const collapsed = localStorage.getItem('sidebar_collapsed') === 'true'
+    this.pushEvent('sidebar-state-loaded', { collapsed })
+    
+    this.handleEvent('store-sidebar-state', ({ collapsed }) => {
+      localStorage.setItem('sidebar_collapsed', collapsed.toString())
+    })
+  }
+}
+
+const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook, SidebarState }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
