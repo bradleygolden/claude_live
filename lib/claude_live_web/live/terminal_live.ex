@@ -277,6 +277,19 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
+  defp get_repository_name(terminal) do
+    if terminal.worktree_id do
+      try do
+        worktree = Ash.get!(ClaudeLive.Claude.Worktree, terminal.worktree_id, load: :repository)
+        Path.basename(worktree.repository.path)
+      rescue
+        _ -> "Unknown Repository"
+      end
+    else
+      "Unknown Repository"
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -369,7 +382,9 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   </button>
                   <!-- Tooltip on hover -->
                   <div class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-40">
-                    {terminal.name} - {terminal.worktree_branch}
+                    <div class="font-bold">{terminal.worktree_branch}</div>
+                    <div class="text-gray-400">{get_repository_name(terminal)}</div>
+                    <div class="text-gray-500">{terminal.name}</div>
                   </div>
                 </div>
               <% end %>
@@ -395,13 +410,16 @@ defmodule ClaudeLiveWeb.TerminalLive do
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class={[
-                          "text-sm font-semibold truncate",
-                          (terminal.connected && "text-gray-100") || "text-gray-400"
+                          "text-sm font-bold truncate",
+                          (terminal.connected && "text-white") || "text-gray-300"
                         ]}>
-                          {terminal.name}
+                          {terminal.worktree_branch}
+                        </div>
+                        <div class="text-xs text-gray-400 truncate mt-0.5">
+                          {get_repository_name(terminal)}
                         </div>
                         <div class="text-xs text-gray-500 truncate mt-0.5">
-                          {terminal.worktree_branch}
+                          {terminal.name}
                         </div>
                         <div class="flex items-center gap-1 mt-1">
                           <span class={[
