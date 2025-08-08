@@ -12,8 +12,20 @@ defmodule ClaudeLive.Terminal.Supervisor do
 
   def stop_terminal(session_id) do
     case Registry.lookup(ClaudeLive.Terminal.Registry, session_id) do
-      [{pid, _}] -> DynamicSupervisor.terminate_child(__MODULE__, pid)
-      [] -> {:error, :not_found}
+      [{pid, _}] ->
+        # Try graceful termination first, then force kill if needed
+        Task.start(fn ->
+          Process.sleep(100)
+
+          if Process.alive?(pid) do
+            Process.exit(pid, :kill)
+          end
+        end)
+
+        DynamicSupervisor.terminate_child(__MODULE__, pid)
+
+      [] ->
+        {:error, :not_found}
     end
   end
 

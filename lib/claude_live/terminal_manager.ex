@@ -112,8 +112,16 @@ defmodule ClaudeLive.TerminalManager do
     {terminal, updated_terminals} = Map.pop(state.terminals, terminal_id)
 
     if terminal do
+      # Try to stop the terminal, but don't block if it's unresponsive
       if terminal[:session_id] do
-        ClaudeLive.Terminal.Supervisor.stop_terminal(terminal.session_id)
+        Task.start(fn ->
+          try do
+            ClaudeLive.Terminal.Supervisor.stop_terminal(terminal.session_id)
+          catch
+            :exit, _ -> :ok
+            :error, _ -> :ok
+          end
+        end)
       end
 
       updated_active =
