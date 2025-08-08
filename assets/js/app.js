@@ -75,6 +75,7 @@ const SingleTerminalHook = {
     }
     
     this.terminalId = terminalId
+    this.hasInitialized = false
     
     this.handleEvent("terminal_output", ({ data }) => {
       this.terminalManager.writeToTerminal(this.terminalId, data)
@@ -88,8 +89,30 @@ const SingleTerminalHook = {
       this.terminalManager.handleTerminalClosed(this.terminalId)
     })
     
+    this.handleEvent("auto-focus-terminal", ({ terminal_id }) => {
+      console.log('Auto-focus event received for terminal:', terminal_id)
+      setTimeout(() => {
+        if (this.terminalManager.terminals[terminal_id]) {
+          const terminal = this.terminalManager.terminals[terminal_id]
+          console.log('Focusing terminal from auto-focus event:', terminal_id)
+          terminal.focus()
+        } else {
+          console.log('Terminal not found for auto-focus, initializing:', terminal_id)
+          this.terminalManager.initTerminal(terminal_id)
+          setTimeout(() => {
+            if (this.terminalManager.terminals[terminal_id]) {
+              this.terminalManager.terminals[terminal_id].focus()
+            }
+          }, 200)
+        }
+      }, 100)
+    })
+    
+    // Auto-initialize terminal on mount
     setTimeout(() => {
-      if (this.terminalId) {
+      if (this.terminalId && !this.hasInitialized) {
+        this.hasInitialized = true
+        console.log('Auto-initializing terminal:', this.terminalId)
         this.terminalManager.initTerminal(this.terminalId)
       }
     }, 100)

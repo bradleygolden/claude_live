@@ -35,6 +35,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def handle_params(_params, _url, socket) do
+    # Auto-focus terminal when navigated to
+    socket = push_event(socket, "auto-focus-terminal", %{terminal_id: socket.assigns.terminal_id})
     {:noreply, socket}
   end
 
