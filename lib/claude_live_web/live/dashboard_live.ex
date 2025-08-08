@@ -1505,6 +1505,15 @@ defmodule ClaudeLiveWeb.DashboardLive do
     repository
     |> Ash.load!(worktrees: :sessions)
     |> Map.get(:worktrees, [])
+    |> Enum.sort_by(fn worktree ->
+      # Worktrees without paths (being created) come first
+      # Then sort by inserted_at (newest first)
+      if is_nil(worktree.path) do
+        {0, DateTime.to_unix(worktree.inserted_at || DateTime.utc_now())}
+      else
+        {1, -DateTime.to_unix(worktree.inserted_at || DateTime.utc_now())}
+      end
+    end)
   end
 
   defp get_worktree_terminals(global_terminals, worktree_id) do
