@@ -1026,25 +1026,9 @@ defmodule ClaudeLiveWeb.DashboardLive do
                     <div class="p-6 pb-4">
                       <div class="flex items-start justify-between">
                         <div class="flex items-start flex-1">
-                          <button
-                            phx-click="toggle-worktree"
-                            phx-value-worktree-id={worktree.id}
-                            class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0 hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
-                            title={
-                              if MapSet.member?(@collapsed_worktrees, worktree.id),
-                                do: "Expand",
-                                else: "Collapse"
-                            }
-                          >
-                            <.icon
-                              name={
-                                if MapSet.member?(@collapsed_worktrees, worktree.id),
-                                  do: "hero-chevron-right",
-                                  else: "hero-chevron-down"
-                              }
-                              class="w-5 h-5 text-white"
-                            />
-                          </button>
+                          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0">
+                            <.icon name="hero-code-bracket" class="w-5 h-5 text-white" />
+                          </div>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-3">
                               <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -1175,42 +1159,39 @@ defmodule ClaudeLiveWeb.DashboardLive do
     <!-- Terminals for this worktree -->
                     <!-- Terminals Section -->
                     <% worktree_terminals = get_worktree_terminals(@global_terminals, worktree.id) %>
-                    <%= if MapSet.member?(@collapsed_worktrees, worktree.id) do %>
-                      <!-- Collapsed state - show terminal count -->
-                      <div class="border-t border-gray-200/50 dark:border-gray-800 px-6 py-3">
-                        <div class="flex items-center justify-between">
+                    <div class="border-t border-gray-200/50 dark:border-gray-800">
+                      <div class="px-6 py-4">
+                        <div class="flex items-center justify-between mb-3">
                           <div class="flex items-center gap-2">
-                            <.icon
-                              name="hero-command-line"
-                              class="w-4 h-4 text-gray-500 dark:text-gray-400"
-                            />
-                            <span class="text-sm text-gray-600 dark:text-gray-400">
-                              {length(worktree_terminals)} terminal(s)
-                            </span>
-                          </div>
-                          <%= if worktree_terminals == [] do %>
                             <button
-                              phx-click="create_terminal"
-                              phx-value-worktree_id={worktree.id}
-                              class="inline-flex items-center px-3 py-1 text-xs font-medium bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg transition-all duration-200"
+                              phx-click="toggle-worktree"
+                              phx-value-worktree-id={worktree.id}
+                              class="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              title={
+                                if MapSet.member?(@collapsed_worktrees, worktree.id),
+                                  do: "Expand terminals",
+                                  else: "Collapse terminals"
+                              }
                             >
-                              <.icon name="hero-plus" class="w-3 h-3 mr-1" /> Create
+                              <.icon
+                                name={
+                                  if MapSet.member?(@collapsed_worktrees, worktree.id),
+                                    do: "hero-chevron-right",
+                                    else: "hero-chevron-down"
+                                }
+                                class="w-3 h-3 text-gray-500 dark:text-gray-400"
+                              />
                             </button>
-                          <% end %>
-                        </div>
-                      </div>
-                    <% else %>
-                      <div class="border-t border-gray-200/50 dark:border-gray-800">
-                        <div class="px-6 py-4">
-                          <div class="flex items-center justify-between mb-3">
                             <span class="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                               Terminals
                             </span>
-                            <span class="text-xs text-gray-500 dark:text-gray-500">
-                              {length(worktree_terminals)} active
-                            </span>
                           </div>
+                          <span class="text-xs text-gray-500 dark:text-gray-500">
+                            {length(worktree_terminals)} active
+                          </span>
+                        </div>
 
+                        <%= unless MapSet.member?(@collapsed_worktrees, worktree.id) do %>
                           <%= if worktree_terminals == [] do %>
                             <div class="flex flex-col items-center justify-center py-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
                               <.icon name="hero-command-line" class="w-6 h-6 text-gray-400 mb-2" />
@@ -1266,9 +1247,9 @@ defmodule ClaudeLiveWeb.DashboardLive do
                               <.icon name="hero-plus" class="w-3 h-3 mr-1.5" /> Add Terminal
                             </button>
                           <% end %>
-                        </div>
+                        <% end %>
                       </div>
-                    <% end %>
+                    </div>
                   </div>
                 <% end %>
 
