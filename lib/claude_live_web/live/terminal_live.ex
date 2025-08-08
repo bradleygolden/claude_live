@@ -43,39 +43,72 @@ defmodule ClaudeLiveWeb.TerminalLive do
     session_id = socket.assigns.session_id
     terminal = socket.assigns.terminal
 
-    if ClaudeLive.Terminal.PtyServer.exists?(session_id) do
-      unless socket.assigns.subscribed do
-        ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
+    result =
+      if ClaudeLive.Terminal.PtyServer.exists?(session_id) do
+        unless socket.assigns.subscribed do
+          try do
+            ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
+          catch
+            :exit, {:timeout, _} ->
+              Logger.warning("Timeout subscribing to terminal #{session_id}, retrying...")
+              Process.sleep(100)
+              ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
+          end
+        end
+
+        case ClaudeLive.Terminal.PtyServer.get_buffer(session_id) do
+          {:ok, buffer} ->
+            Enum.each(buffer, fn data ->
+              send(self(), {ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}})
+            end)
+
+          _ ->
+            :ok
+        end
+
+        ClaudeLive.Terminal.PtyServer.resize(session_id, cols, rows)
+        :ok
+      else
+        case ClaudeLive.Terminal.Supervisor.start_terminal(session_id) do
+          {:ok, _pid} ->
+            # Give the server a moment to fully initialize
+            Process.sleep(50)
+
+            try do
+              ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
+
+              ClaudeLive.Terminal.PtyServer.spawn_shell(session_id,
+                cols: cols,
+                rows: rows,
+                shell: System.get_env("SHELL", "/bin/bash"),
+                cwd: terminal.worktree_path
+              )
+
+              :ok
+            catch
+              :exit, {:timeout, _} ->
+                Logger.error("Failed to initialize terminal #{session_id} after starting")
+                {:error, "Failed to connect to terminal. Please refresh the page."}
+            end
+
+          {:error, reason} ->
+            Logger.error("Failed to start terminal #{session_id}: #{inspect(reason)}")
+            {:error, "Failed to start terminal"}
+        end
       end
 
-      case ClaudeLive.Terminal.PtyServer.get_buffer(session_id) do
-        {:ok, buffer} ->
-          Enum.each(buffer, fn data ->
-            send(self(), {ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}})
-          end)
+    case result do
+      :ok ->
+        updated_terminal = Map.put(terminal, :connected, true)
+        ClaudeLive.TerminalManager.upsert_terminal(socket.assigns.terminal_id, updated_terminal)
+        {:noreply, assign(socket, :subscribed, true)}
 
-        _ ->
-          :ok
-      end
-
-      ClaudeLive.Terminal.PtyServer.resize(session_id, cols, rows)
-    else
-      {:ok, _pid} = ClaudeLive.Terminal.Supervisor.start_terminal(session_id)
-      ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
-
-      :ok =
-        ClaudeLive.Terminal.PtyServer.spawn_shell(session_id,
-          cols: cols,
-          rows: rows,
-          shell: System.get_env("SHELL", "/bin/bash"),
-          cwd: terminal.worktree_path
-        )
+      {:error, message} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, message)
+         |> assign(:subscribed, false)}
     end
-
-    updated_terminal = Map.put(terminal, :connected, true)
-    ClaudeLive.TerminalManager.upsert_terminal(socket.assigns.terminal_id, updated_terminal)
-
-    {:noreply, assign(socket, :subscribed, true)}
   end
 
   @impl true
