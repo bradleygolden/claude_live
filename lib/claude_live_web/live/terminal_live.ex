@@ -377,10 +377,9 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <!-- Expanded view - full details -->
               <%= for {tid, terminal} <- @global_terminals do %>
                 <div class={[
-                  "mx-2 mb-1 rounded-lg group relative transition-all duration-200 flex items-center",
+                  "mx-2 mb-1 rounded-lg group relative transition-all duration-200 flex items-center hover:bg-gray-800/50",
                   tid == @terminal_id &&
-                    "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20",
-                  tid != @terminal_id && "hover:bg-gray-800/50"
+                    "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20"
                 ]}>
                   <.link
                     navigate={~p"/terminals/#{tid}"}
@@ -423,7 +422,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   <button
                     phx-click="close-terminal"
                     phx-value-terminal-id={tid}
-                    class="p-2 mr-2 text-gray-500 hover:text-red-400 transition-all duration-200 rounded-lg hover:bg-red-900/20"
+                    class="p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
                     title="Close terminal"
                   >
                     <.icon name="hero-x-mark" class="w-4 h-4" />
