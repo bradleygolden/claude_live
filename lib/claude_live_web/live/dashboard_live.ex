@@ -1365,14 +1365,17 @@ defmodule ClaudeLiveWeb.DashboardLive do
     worktree_terminals = get_worktree_terminals(socket.assigns.global_terminals, id)
 
     cond do
-      # Failed worktree (no path) - always allow deletion
       is_nil(worktree.path) ->
         case Ash.destroy(worktree) do
           :ok ->
-            worktrees = load_worktrees(socket.assigns.selected_repository)
+            repository =
+              Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id)
+
+            worktrees = load_worktrees(repository)
 
             {:noreply,
              socket
+             |> assign(:selected_repository, repository)
              |> assign(:worktrees, worktrees)
              |> put_flash(:info, "Failed worktree removed successfully")}
 
@@ -1380,7 +1383,6 @@ defmodule ClaudeLiveWeb.DashboardLive do
             {:noreply, put_flash(socket, :error, "Failed to remove worktree")}
         end
 
-      # Has active terminals - prevent deletion
       length(worktree_terminals) > 0 ->
         {:noreply,
          put_flash(
@@ -1389,14 +1391,17 @@ defmodule ClaudeLiveWeb.DashboardLive do
            "Cannot delete worktree with #{length(worktree_terminals)} active terminal(s). Please close all terminals first."
          )}
 
-      # Normal worktree with no terminals - allow deletion
       true ->
         case Ash.destroy(worktree) do
           :ok ->
-            worktrees = load_worktrees(socket.assigns.selected_repository)
+            repository =
+              Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id)
+
+            worktrees = load_worktrees(repository)
 
             {:noreply,
              socket
+             |> assign(:selected_repository, repository)
              |> assign(:worktrees, worktrees)
              |> put_flash(:info, "Worktree deleted successfully")}
 
@@ -1497,21 +1502,29 @@ defmodule ClaudeLiveWeb.DashboardLive do
       :ok ->
         repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
 
-        selected_repository =
+        {selected_repository, worktrees, should_patch} =
           if socket.assigns.selected_repository &&
                socket.assigns.selected_repository.id == repo_id do
-            nil
+            {nil, [], true}
           else
-            socket.assigns.selected_repository
+            {socket.assigns.selected_repository, socket.assigns.worktrees, false}
           end
 
-        {:noreply,
-         socket
-         |> assign(:repositories, repositories)
-         |> assign(:selected_repository, selected_repository)
-         |> assign(:worktrees, [])
-         |> push_navigate(to: ~p"/")
-         |> put_flash(:info, "Repository removed successfully")}
+        socket =
+          socket
+          |> assign(:repositories, repositories)
+          |> assign(:selected_repository, selected_repository)
+          |> assign(:worktrees, worktrees)
+          |> put_flash(:info, "Repository removed successfully")
+
+        socket =
+          if should_patch do
+            push_patch(socket, to: ~p"/")
+          else
+            socket
+          end
+
+        {:noreply, socket}
 
       {:error, _error} ->
         {:noreply, put_flash(socket, :error, "Failed to remove repository")}
