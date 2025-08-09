@@ -869,16 +869,38 @@ defmodule ClaudeLiveWeb.DashboardLive do
           <h2 class="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
             Repositories
           </h2>
-          <.link
-            navigate={~p"/dashboard/browse/directory"}
-            class="mt-3 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200"
-          >
-            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4">
-              </path>
-            </svg>
-            Add repository
-          </.link>
+          <div class="mt-3 flex gap-3">
+            <.link
+              navigate={~p"/dashboard/browse/directory"}
+              class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200"
+            >
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                >
+                </path>
+              </svg>
+              Add local repository
+            </.link>
+            <.link
+              navigate={~p"/dashboard/clone/github"}
+              class="inline-flex items-center text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors duration-200"
+            >
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 4v16m8-8H4"
+                >
+                </path>
+              </svg>
+              Clone from GitHub
+            </.link>
+          </div>
         </div>
 
         <div class="flex-1 overflow-y-auto py-2">
@@ -897,7 +919,14 @@ defmodule ClaudeLiveWeb.DashboardLive do
                     <.icon name="hero-folder" class="w-5 h-5 text-white" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="font-semibold text-gray-900 dark:text-gray-100">{repo.name}</div>
+                    <div class="flex items-center gap-2">
+                      <div class="font-semibold text-gray-900 dark:text-gray-100">{repo.name}</div>
+                      <%= if repo.source_type == :forked || repo.upstream_url do %>
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
+                          Fork
+                        </span>
+                      <% end %>
+                    </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{repo.path}</div>
                   </div>
                 </div>

@@ -17,6 +17,29 @@ defmodule ClaudeLive.Claude.Repository do
       public? true
     end
 
+    # GitHub metadata fields
+    attribute :source_type, :atom do
+      constraints one_of: [:local, :cloned, :forked]
+      default :local
+      public? true
+    end
+
+    attribute :remote_url, :string do
+      public? true
+    end
+
+    attribute :upstream_url, :string do
+      public? true
+    end
+
+    attribute :github_owner, :string do
+      public? true
+    end
+
+    attribute :github_name, :string do
+      public? true
+    end
+
     timestamps()
   end
 

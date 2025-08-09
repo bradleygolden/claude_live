@@ -23,6 +23,7 @@ defmodule ClaudeLiveWeb.Router do
       live "/", DashboardLive, :index
       live "/dashboard/:repo_id", DashboardLive, :show
       live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
+      live "/dashboard/clone/github", RemoteCloneLive, :clone
       live "/terminals/:terminal_id", TerminalLive, :index
       live "/git-diff/:worktree_id", GitDiffLive, :index
     end
