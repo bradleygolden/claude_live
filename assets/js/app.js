@@ -130,6 +130,11 @@ const DashboardHooks = {
     this.handleEvent('open-url', ({ url }) => {
       window.open(url, '_blank')
     })
+    
+    // Handle alert messages
+    this.handleEvent('show-alert', ({ message }) => {
+      alert(message)
+    })
   }
 }
 

@@ -931,15 +931,28 @@ defmodule ClaudeLiveWeb.DashboardLive do
                   </div>
                 </div>
               </.link>
-              <button
-                phx-click="remove-repository"
-                phx-value-id={repo.id}
-                class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 cursor-pointer"
-                data-confirm="Remove this repository from the list?"
-                title="Remove repository"
-              >
-                <.icon name="hero-trash" class="w-4 h-4 text-red-500 dark:text-red-400" />
-              </button>
+              <% has_worktrees = repo.worktrees && length(repo.worktrees) > 0 %>
+              <%= if has_worktrees do %>
+                <button
+                  phx-click="show-worktree-error"
+                  phx-value-id={repo.id}
+                  phx-value-count={length(repo.worktrees)}
+                  class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 cursor-pointer"
+                  title="Delete worktrees first"
+                >
+                  <.icon name="hero-trash" class="w-4 h-4 text-red-500 dark:text-red-400" />
+                </button>
+              <% else %>
+                <button
+                  phx-click="remove-repository"
+                  phx-value-id={repo.id}
+                  class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/50 cursor-pointer"
+                  data-confirm="Remove this repository from the list?"
+                  title="Remove repository"
+                >
+                  <.icon name="hero-trash" class="w-4 h-4 text-red-500 dark:text-red-400" />
+                </button>
+              <% end %>
             </div>
           <% end %>
         </div>
@@ -1397,13 +1410,18 @@ defmodule ClaudeLiveWeb.DashboardLive do
       is_nil(worktree.path) ->
         case Ash.destroy(worktree) do
           :ok ->
+            repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+
             repository =
-              Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id)
+              Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id,
+                load: :worktrees
+              )
 
             worktrees = load_worktrees(repository)
 
             {:noreply,
              socket
+             |> assign(:repositories, repositories)
              |> assign(:selected_repository, repository)
              |> assign(:worktrees, worktrees)
              |> put_flash(:info, "Failed worktree removed successfully")}
@@ -1423,13 +1441,18 @@ defmodule ClaudeLiveWeb.DashboardLive do
       true ->
         case Ash.destroy(worktree) do
           :ok ->
+            repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+
             repository =
-              Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id)
+              Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id,
+                load: :worktrees
+              )
 
             worktrees = load_worktrees(repository)
 
             {:noreply,
              socket
+             |> assign(:repositories, repositories)
              |> assign(:selected_repository, repository)
              |> assign(:worktrees, worktrees)
              |> put_flash(:info, "Worktree deleted successfully")}
@@ -1526,37 +1549,64 @@ defmodule ClaudeLiveWeb.DashboardLive do
      |> push_navigate(to: ~p"/terminals/#{terminal_id}")}
   end
 
+  def handle_event("show-worktree-error", %{"id" => _repo_id, "count" => count}, socket) do
+    message =
+      if count == "1" do
+        "Cannot remove repository: 1 active worktree exists. Please delete the worktree first."
+      else
+        "Cannot remove repository: #{count} active worktrees exist. Please delete all worktrees first."
+      end
+
+    {:noreply,
+     socket
+     |> push_event("show-alert", %{message: message})}
+  end
+
   def handle_event("remove-repository", %{"id" => repo_id}, socket) do
-    case Ash.destroy(Ash.get!(ClaudeLive.Claude.Repository, repo_id)) do
-      :ok ->
-        repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+    repository = Ash.get!(ClaudeLive.Claude.Repository, repo_id, load: :worktrees)
 
-        {selected_repository, worktrees, should_patch} =
-          if socket.assigns.selected_repository &&
-               socket.assigns.selected_repository.id == repo_id do
-            {nil, [], true}
-          else
-            {socket.assigns.selected_repository, socket.assigns.worktrees, false}
-          end
+    if repository.worktrees && length(repository.worktrees) > 0 do
+      worktree_count = length(repository.worktrees)
+      worktree_word = if worktree_count == 1, do: "worktree", else: "worktrees"
 
-        socket =
-          socket
-          |> assign(:repositories, repositories)
-          |> assign(:selected_repository, selected_repository)
-          |> assign(:worktrees, worktrees)
-          |> put_flash(:info, "Repository removed successfully")
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "Cannot remove repository: #{worktree_count} active #{worktree_word} exist. Please delete all worktrees first."
+       )}
+    else
+      case Ash.destroy(repository) do
+        :ok ->
+          repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
 
-        socket =
-          if should_patch do
-            push_patch(socket, to: ~p"/")
-          else
+          {selected_repository, worktrees, should_patch} =
+            if socket.assigns.selected_repository &&
+                 socket.assigns.selected_repository.id == repo_id do
+              {nil, [], true}
+            else
+              {socket.assigns.selected_repository, socket.assigns.worktrees, false}
+            end
+
+          socket =
             socket
-          end
+            |> assign(:repositories, repositories)
+            |> assign(:selected_repository, selected_repository)
+            |> assign(:worktrees, worktrees)
+            |> put_flash(:info, "Repository removed successfully")
 
-        {:noreply, socket}
+          socket =
+            if should_patch do
+              push_patch(socket, to: ~p"/")
+            else
+              socket
+            end
 
-      {:error, _error} ->
-        {:noreply, put_flash(socket, :error, "Failed to remove repository")}
+          {:noreply, socket}
+
+        {:error, _error} ->
+          {:noreply, put_flash(socket, :error, "Failed to remove repository")}
+      end
     end
   end
 
