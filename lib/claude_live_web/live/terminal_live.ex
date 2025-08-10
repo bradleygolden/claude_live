@@ -101,7 +101,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
       :ok ->
         updated_terminal = Map.put(terminal, :connected, true)
         ClaudeLive.TerminalManager.upsert_terminal(socket.assigns.terminal_id, updated_terminal)
-        {:noreply, assign(socket, :subscribed, true)}
+        {:noreply, socket |> assign(:subscribed, true) |> assign(:terminal, updated_terminal)}
 
       {:error, message} ->
         {:noreply,
@@ -134,9 +134,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if socket.assigns.terminal.connected do
       ClaudeLive.Terminal.PtyServer.unsubscribe(socket.assigns.session_id, self())
       ClaudeLive.TerminalManager.update_terminal_status(socket.assigns.terminal_id, false)
+      updated_terminal = Map.put(socket.assigns.terminal, :connected, false)
+      {:noreply, assign(socket, :terminal, updated_terminal)}
+    else
+      {:noreply, socket}
     end
-
-    {:noreply, socket}
   end
 
   @impl true
@@ -227,8 +229,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if session_id == socket.assigns.session_id do
       Logger.info("Terminal #{socket.assigns.terminal_id} exited with code: #{exit_code}")
       ClaudeLive.TerminalManager.update_terminal_status(socket.assigns.terminal_id, false)
+      updated_terminal = Map.put(socket.assigns.terminal, :connected, false)
 
-      {:noreply, push_event(socket, "terminal_exit", %{code: exit_code})}
+      {:noreply,
+       socket
+       |> assign(:terminal, updated_terminal)
+       |> push_event("terminal_exit", %{code: exit_code})}
     else
       {:noreply, socket}
     end
@@ -241,8 +247,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
       ) do
     if session_id == socket.assigns.session_id do
       ClaudeLive.TerminalManager.update_terminal_status(socket.assigns.terminal_id, false)
+      updated_terminal = Map.put(socket.assigns.terminal, :connected, false)
 
-      {:noreply, push_event(socket, "terminal_closed", %{})}
+      {:noreply,
+       socket |> assign(:terminal, updated_terminal) |> push_event("terminal_closed", %{})}
     else
       {:noreply, socket}
     end
