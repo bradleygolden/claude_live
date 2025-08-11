@@ -87,6 +87,11 @@ export class TerminalManager {
       }
     });
 
+    container.addEventListener('click', () => {
+      terminal.focus();
+      terminal.scrollToBottom();
+    });
+
     // Fit terminal to container
     fitAddon.fit();
 
@@ -116,8 +121,20 @@ export class TerminalManager {
     if (this.terminals[terminalId]) {
       const terminal = this.terminals[terminalId];
       if (terminal && !terminal.disposed) {
+        const buffer = terminal.buffer.active;
+        const scrollbackBuffer = buffer.baseY + buffer.cursorY;
+        const isAtBottom = buffer.viewportY >= scrollbackBuffer - terminal.rows + 1;
+        
+        const shouldForceScroll = data.includes('\x1b[2J') || 
+                                 data.includes('\x1b[H') || 
+                                 data.includes('\f') ||
+                                 data.includes('\x1bc');
+        
         terminal.write(data);
-        terminal.scrollToBottom();
+        
+        if (isAtBottom || shouldForceScroll) {
+          terminal.scrollToBottom();
+        }
       }
     } else {
       console.warn(`Terminal ${terminalId} not found for output`);
@@ -173,6 +190,7 @@ export class TerminalManager {
         terminal.fitAddon.fit();
       }
       terminal.focus();
+      terminal.scrollToBottom();
     }
 
     this.activeTerminalId = terminalId;
