@@ -822,6 +822,12 @@ defmodule ClaudeLiveWeb.DashboardLive do
   def mount(_params, _session, socket) do
     repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
 
+    Enum.each(repositories, fn repo ->
+      ClaudeLive.Claude.Worktree.sync_worktrees_with_git(repo)
+    end)
+
+    repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+
     socket =
       socket
       |> assign(:repositories, repositories)
@@ -1004,6 +1010,14 @@ defmodule ClaudeLiveWeb.DashboardLive do
                   </p>
                 </div>
                 <div class="flex items-center gap-3">
+                  <button
+                    phx-click="sync-worktrees"
+                    class="inline-flex items-center px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium rounded-lg transition-all duration-200 cursor-pointer"
+                    title="Sync worktrees with git"
+                  >
+                    <.icon name="hero-arrow-path" class="w-5 h-5" />
+                    <span class="ml-2">Sync</span>
+                  </button>
                   <button
                     phx-click="new-worktree"
                     class="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
@@ -1560,6 +1574,47 @@ defmodule ClaudeLiveWeb.DashboardLive do
     {:noreply,
      socket
      |> push_event("show-alert", %{message: message})}
+  end
+
+  def handle_event("sync-worktrees", _params, socket) do
+    if socket.assigns.selected_repository do
+      case ClaudeLive.Claude.Worktree.sync_worktrees_with_git(socket.assigns.selected_repository) do
+        {:ok, results} ->
+          cleaned_count =
+            Enum.count(results, fn
+              {:ok, _} -> true
+              _ -> false
+            end)
+
+          repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+
+          repository =
+            Ash.get!(ClaudeLive.Claude.Repository, socket.assigns.selected_repository.id,
+              load: :worktrees
+            )
+
+          worktrees = load_worktrees(repository)
+
+          message =
+            if cleaned_count > 0 do
+              "Synced worktrees with git. Cleaned up #{cleaned_count} orphaned worktree(s)."
+            else
+              "Worktrees are in sync with git."
+            end
+
+          {:noreply,
+           socket
+           |> assign(:repositories, repositories)
+           |> assign(:selected_repository, repository)
+           |> assign(:worktrees, worktrees)
+           |> put_flash(:info, message)}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Failed to sync worktrees: #{reason}")}
+      end
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("remove-repository", %{"id" => repo_id}, socket) do

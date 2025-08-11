@@ -163,8 +163,14 @@ defmodule ClaudeLive.Claude.Worktree do
       {_output, 0} ->
         :ok
 
-      {output, _status} ->
-        {:error, output}
+      {output, status} ->
+        if status == 128 &&
+             String.contains?(output, ["is not a working tree", "is not a git repository"]) do
+          System.cmd("git", ["worktree", "prune"], cd: repository_path, stderr_to_stdout: true)
+          :ok
+        else
+          {:error, output}
+        end
     end
   end
 
@@ -175,5 +181,40 @@ defmodule ClaudeLive.Claude.Worktree do
 
   identities do
     identity :unique_branch_per_repository, [:repository_id, :branch]
+  end
+
+  def sync_worktrees_with_git(repository) do
+    repository = Ash.load!(repository, :worktrees, authorize?: false)
+
+    case System.cmd("git", ["worktree", "list"], cd: repository.path, stderr_to_stdout: true) do
+      {output, 0} ->
+        git_worktree_paths =
+          output
+          |> String.split("\n")
+          |> Enum.map(&(String.split(&1, " ") |> List.first()))
+          |> Enum.filter(&(&1 && &1 != "" && &1 != repository.path))
+          |> MapSet.new()
+
+        orphaned_worktrees =
+          repository.worktrees
+          |> Enum.filter(fn worktree ->
+            worktree.path && !MapSet.member?(git_worktree_paths, worktree.path)
+          end)
+
+        results =
+          Enum.map(orphaned_worktrees, fn worktree ->
+            case Ash.destroy(worktree, authorize?: false) do
+              :ok -> {:ok, worktree.branch}
+              error -> {:error, worktree.branch, error}
+            end
+          end)
+
+        System.cmd("git", ["worktree", "prune"], cd: repository.path, stderr_to_stdout: true)
+
+        {:ok, results}
+
+      {error, _status} ->
+        {:error, "Failed to list git worktrees: #{error}"}
+    end
   end
 end
