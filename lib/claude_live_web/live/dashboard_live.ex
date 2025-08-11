@@ -1078,19 +1078,43 @@ defmodule ClaudeLiveWeb.DashboardLive do
 
               <div class="grid grid-cols-1 gap-4">
                 <%= for worktree <- @worktrees do %>
+                  <% worktree_terminals = get_worktree_terminals(@global_terminals, worktree.id) %>
+                  <% first_terminal = List.first(worktree_terminals) %>
                   <div class="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl border border-gray-200/50 dark:border-gray-800 transition-all duration-300">
                     <!-- Worktree Header -->
                     <div class="p-6 pb-4">
                       <div class="flex items-start justify-between">
                         <div class="flex items-start flex-1">
-                          <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0">
-                            <.icon name="hero-code-bracket" class="w-5 h-5 text-white" />
-                          </div>
+                          <%= if first_terminal do %>
+                            <.link
+                              navigate={~p"/terminals/#{first_terminal.id}"}
+                              class="flex items-start cursor-pointer group"
+                            >
+                              <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0 group-hover:from-green-600 group-hover:to-emerald-700 transition-all duration-200">
+                                <.icon name="hero-code-bracket" class="w-5 h-5 text-white" />
+                              </div>
+                            </.link>
+                          <% else %>
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mr-3 flex-shrink-0">
+                              <.icon name="hero-code-bracket" class="w-5 h-5 text-white" />
+                            </div>
+                          <% end %>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-3">
-                              <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">
-                                {worktree.branch}
-                              </h3>
+                              <%= if first_terminal do %>
+                                <.link
+                                  navigate={~p"/terminals/#{first_terminal.id}"}
+                                  class="cursor-pointer group"
+                                >
+                                  <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-200">
+                                    {worktree.branch}
+                                  </h3>
+                                </.link>
+                              <% else %>
+                                <h3 class="text-xl font-bold text-gray-900 dark:text-gray-100">
+                                  {worktree.branch}
+                                </h3>
+                              <% end %>
                               <%= if worktree.path do %>
                                 <div class="flex items-center gap-1">
                                   <button
