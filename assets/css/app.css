@@ -48,6 +48,16 @@
   overflow-y: auto !important;
 }
 
+/* Hide scrollbar for terminal tabs */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 .diff-viewer {
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
 }

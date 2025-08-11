@@ -13,6 +13,16 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if terminal do
       ClaudeLive.TerminalManager.subscribe()
 
+      worktree_terminals =
+        if terminal.worktree_id do
+          ClaudeLive.TerminalManager.list_worktree_terminals(terminal.worktree_id)
+        else
+          %{terminal_id => terminal}
+        end
+
+      all_terminals = ClaudeLive.TerminalManager.list_terminals()
+      worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+
       socket =
         socket
         |> assign(:terminal_id, terminal_id)
@@ -21,6 +31,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:subscribed, false)
         |> assign(:page_title, "Terminal - #{terminal.name}")
         |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
+        |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+        |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
         |> push_event("load-sidebar-state", %{})
 
@@ -177,22 +189,91 @@ defmodule ClaudeLiveWeb.TerminalLive do
     case ClaudeLive.TerminalManager.delete_terminal(terminal_id) do
       :ok ->
         if terminal_id == socket.assigns.terminal_id do
-          remaining_terminals = ClaudeLive.TerminalManager.list_terminals()
+          worktree_terminals =
+            if socket.assigns.terminal.worktree_id do
+              ClaudeLive.TerminalManager.list_worktree_terminals(
+                socket.assigns.terminal.worktree_id
+              )
+            else
+              %{}
+            end
 
-          if map_size(remaining_terminals) > 0 do
-            {first_id, _} = Enum.at(remaining_terminals, 0)
+          if map_size(worktree_terminals) > 0 do
+            {first_id, _} = Enum.at(worktree_terminals, 0)
             {:noreply, push_navigate(socket, to: ~p"/terminals/#{first_id}")}
           else
-            {:noreply, push_navigate(socket, to: ~p"/")}
+            remaining_terminals = ClaudeLive.TerminalManager.list_terminals()
+
+            if map_size(remaining_terminals) > 0 do
+              {first_id, _} = Enum.at(remaining_terminals, 0)
+              {:noreply, push_navigate(socket, to: ~p"/terminals/#{first_id}")}
+            else
+              {:noreply, push_navigate(socket, to: ~p"/")}
+            end
           end
         else
+          updated_worktree_terminals =
+            if socket.assigns.terminal.worktree_id do
+              ClaudeLive.TerminalManager.list_worktree_terminals(
+                socket.assigns.terminal.worktree_id
+              )
+            else
+              socket.assigns.worktree_terminals
+            end
+
+          all_terminals = ClaudeLive.TerminalManager.list_terminals()
+          worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+
           {:noreply,
-           assign(socket, :global_terminals, ClaudeLive.TerminalManager.list_terminals())}
+           socket
+           |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
+           |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+           |> assign(:worktree_terminals, updated_worktree_terminals)}
         end
 
       {:error, :not_found} ->
         {:noreply, put_flash(socket, :error, "Terminal not found")}
     end
+  end
+
+  @impl true
+  def handle_event("new-terminal", _params, socket) do
+    terminal = socket.assigns.terminal
+
+    existing_numbers =
+      socket.assigns.worktree_terminals
+      |> Map.values()
+      |> Enum.map(fn t ->
+        case Regex.run(~r/Terminal (\d+)/, t.name) do
+          [_, num] -> String.to_integer(num)
+          _ -> 0
+        end
+      end)
+
+    next_number =
+      if Enum.empty?(existing_numbers) do
+        1
+      else
+        Enum.max(existing_numbers) + 1
+      end
+
+    new_terminal_id = "#{terminal.worktree_id}-#{next_number}"
+    new_session_id = "terminal-#{terminal.worktree_id}-#{next_number}"
+
+    new_terminal = %{
+      id: new_terminal_id,
+      worktree_id: terminal.worktree_id,
+      worktree_branch: terminal.worktree_branch,
+      worktree_path: terminal.worktree_path,
+      repository_id: terminal.repository_id,
+      session_id: new_session_id,
+      connected: false,
+      name: "Terminal #{next_number}"
+    }
+
+    ClaudeLive.TerminalManager.upsert_terminal(new_terminal_id, new_terminal)
+
+    {:noreply, push_navigate(socket, to: ~p"/terminals/#{new_terminal_id}")}
   end
 
   def handle_event("toggle-sidebar", _params, socket) do
@@ -257,23 +338,54 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
-  def handle_info({:terminal_updated, _}, socket) do
-    {:noreply, socket}
+  def handle_info({:terminal_updated, {_updated_terminal_id, _}}, socket) do
+    worktree_terminals =
+      if socket.assigns.terminal.worktree_id do
+        ClaudeLive.TerminalManager.list_worktree_terminals(socket.assigns.terminal.worktree_id)
+      else
+        socket.assigns.worktree_terminals
+      end
+
+    all_terminals = ClaudeLive.TerminalManager.list_terminals()
+    worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+
+    {:noreply,
+     socket
+     |> assign(:worktree_terminals, worktree_terminals)
+     |> assign(:worktrees_with_terminals, worktrees_with_terminals)}
   end
 
   @impl true
   def handle_info({:terminal_deleted, deleted_terminal_id}, socket) do
+    updated_worktree_terminals =
+      if socket.assigns.terminal.worktree_id do
+        ClaudeLive.TerminalManager.list_worktree_terminals(socket.assigns.terminal.worktree_id)
+      else
+        socket.assigns.worktree_terminals
+      end
+
+    all_terminals = ClaudeLive.TerminalManager.list_terminals()
+    worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+
     updated_socket =
-      assign(socket, :global_terminals, ClaudeLive.TerminalManager.list_terminals())
+      socket
+      |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
+      |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+      |> assign(:worktree_terminals, updated_worktree_terminals)
 
     if deleted_terminal_id == socket.assigns.terminal_id do
-      remaining_terminals = updated_socket.assigns.global_terminals
-
-      if map_size(remaining_terminals) > 0 do
-        {first_id, _} = Enum.at(remaining_terminals, 0)
+      if map_size(updated_worktree_terminals) > 0 do
+        {first_id, _} = Enum.at(updated_worktree_terminals, 0)
         {:noreply, push_navigate(updated_socket, to: ~p"/terminals/#{first_id}")}
       else
-        {:noreply, push_navigate(updated_socket, to: ~p"/")}
+        remaining_terminals = updated_socket.assigns.global_terminals
+
+        if map_size(remaining_terminals) > 0 do
+          {first_id, _} = Enum.at(remaining_terminals, 0)
+          {:noreply, push_navigate(updated_socket, to: ~p"/terminals/#{first_id}")}
+        else
+          {:noreply, push_navigate(updated_socket, to: ~p"/")}
+        end
       end
     else
       {:noreply, updated_socket}
@@ -331,6 +443,28 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
+  defp group_terminals_by_worktree(terminals) do
+    terminals
+    |> Enum.group_by(fn {_id, terminal} ->
+      {terminal.worktree_id, terminal.worktree_branch, terminal.worktree_path}
+    end)
+    |> Enum.map(fn {{worktree_id, branch, path}, grouped_terminals} ->
+      terminal_map = Map.new(grouped_terminals)
+      first_terminal = elem(hd(grouped_terminals), 1)
+
+      %{
+        worktree_id: worktree_id,
+        branch: branch,
+        path: path,
+        repository_name: get_repository_name(first_terminal),
+        terminals: terminal_map,
+        terminal_count: map_size(terminal_map),
+        has_connected: Enum.any?(terminal_map, fn {_id, t} -> t.connected end)
+      }
+    end)
+    |> Enum.sort_by(& &1.repository_name)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -339,7 +473,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
       class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex"
       phx-hook="SidebarState"
     >
-      <!-- Sidebar with terminals list -->
       <div class={[
         "bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
         if @sidebar_collapsed do
@@ -348,7 +481,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
           "w-72"
         end
       ]}>
-        <!-- Header -->
         <div class="border-b border-gray-800/50">
           <div class={[
             "transition-all duration-300",
@@ -362,10 +494,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <%= unless @sidebar_collapsed do %>
                 <div>
                   <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
-                    All Terminals
+                    Workspaces
                   </h3>
                   <p class="text-xs text-gray-500 mt-2">
-                    {map_size(@global_terminals)} active terminal(s)
+                    {length(@worktrees_with_terminals)} workspace(s)
                   </p>
                 </div>
               <% end %>
@@ -389,118 +521,97 @@ defmodule ClaudeLiveWeb.TerminalLive do
             </div>
           </div>
         </div>
-        
-    <!-- Terminals List -->
         <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
-          <%= if map_size(@global_terminals) > 0 do %>
+          <%= if length(@worktrees_with_terminals) > 0 do %>
             <%= if @sidebar_collapsed do %>
-              <!-- Collapsed view - only show icons -->
-              <%= for {tid, terminal} <- @global_terminals do %>
+              <%= for worktree <- @worktrees_with_terminals do %>
+                <% {first_terminal_id, _} = Enum.at(worktree.terminals, 0) %>
                 <div class="mx-2 mb-1 flex justify-center group relative">
                   <.link
-                    navigate={~p"/terminals/#{tid}"}
+                    navigate={~p"/terminals/#{first_terminal_id}"}
                     class={[
                       "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 relative",
-                      tid == @terminal_id &&
+                      worktree.worktree_id == @terminal.worktree_id &&
                         "bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-950/20",
-                      (tid != @terminal_id &&
-                         (terminal.connected && "bg-gradient-to-br from-emerald-600 to-green-700")) ||
+                      (worktree.worktree_id != @terminal.worktree_id &&
+                         (worktree.has_connected && "bg-gradient-to-br from-emerald-600 to-green-700")) ||
                         "bg-gradient-to-br from-gray-600 to-gray-700",
                       "hover:scale-105"
                     ]}
-                    title={terminal.name}
+                    title={worktree.repository_name}
                   >
-                    <.icon name="hero-command-line" class="w-4 h-4 text-white" />
+                    <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
                   </.link>
-                  <!-- Close button on hover -->
-                  <button
-                    phx-click="close-terminal"
-                    phx-value-terminal-id={tid}
-                    class="absolute -top-1 -right-1 w-4 h-4 bg-red-600 hover:bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 z-50"
-                    title="Close terminal"
-                  >
-                    <.icon name="hero-x-mark" class="w-3 h-3" />
-                  </button>
-                  <!-- Tooltip on hover -->
                   <div class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-40">
-                    <div class="font-bold">{terminal.worktree_branch}</div>
-                    <div class="text-gray-400">{get_repository_name(terminal)}</div>
-                    <div class="text-gray-500">{terminal.name}</div>
+                    <div class="font-bold">{worktree.branch}</div>
+                    <div class="text-gray-400">{worktree.repository_name}</div>
+                    <div class="text-gray-500">{worktree.terminal_count} terminal(s)</div>
                   </div>
                 </div>
               <% end %>
             <% else %>
-              <!-- Expanded view - full details -->
-              <%= for {tid, terminal} <- @global_terminals do %>
+              <%= for worktree <- @worktrees_with_terminals do %>
+                <% {first_terminal_id, _} = Enum.at(worktree.terminals, 0) %>
                 <div class={[
-                  "mx-2 mb-1 rounded-lg group relative transition-all duration-200 flex items-center hover:bg-gray-800/50",
-                  tid == @terminal_id &&
+                  "mx-2 mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
+                  worktree.worktree_id == @terminal.worktree_id &&
                     "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20"
                 ]}>
                   <.link
-                    navigate={~p"/terminals/#{tid}"}
-                    class="flex-1 block pl-4 py-3 transition-all duration-200 rounded-l-lg overflow-hidden"
+                    navigate={~p"/terminals/#{first_terminal_id}"}
+                    class="block px-4 py-3 transition-all duration-200 rounded-lg overflow-hidden"
                   >
-                    <div class="flex items-center space-x-3 pr-2">
+                    <div class="flex items-center space-x-3">
                       <div class={[
                         "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                        (terminal.connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                        (worktree.has_connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
                           "bg-gradient-to-br from-gray-600 to-gray-700"
                       ]}>
-                        <.icon name="hero-command-line" class="w-5 h-5 text-white" />
+                        <.icon name="hero-folder-open" class="w-5 h-5 text-white" />
                       </div>
                       <div class="flex-1 min-w-0 overflow-hidden">
                         <div class={[
                           "text-sm font-bold truncate",
-                          (terminal.connected && "text-white") || "text-gray-300"
+                          (worktree.has_connected && "text-white") || "text-gray-300"
                         ]}>
-                          {terminal.worktree_branch}
+                          {worktree.branch}
                         </div>
                         <div class="text-xs text-gray-400 truncate mt-0.5">
-                          {get_repository_name(terminal)}
+                          {worktree.repository_name}
                         </div>
                         <div class="text-xs text-gray-500 truncate mt-0.5">
-                          {terminal.name}
+                          {worktree.terminal_count} terminal{if worktree.terminal_count != 1, do: "s"}
                         </div>
                         <div class="flex items-center gap-1 mt-1">
                           <span class={[
                             "w-1.5 h-1.5 rounded-full",
-                            (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                            (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
+                              "bg-gray-600"
                           ]}>
                           </span>
                           <span class={[
                             "text-xs",
-                            (terminal.connected && "text-emerald-400") || "text-gray-500"
+                            (worktree.has_connected && "text-emerald-400") || "text-gray-500"
                           ]}>
-                            {(terminal.connected && "Connected") || "Disconnected"}
+                            {(worktree.has_connected && "Active") || "Inactive"}
                           </span>
                         </div>
                       </div>
                     </div>
                   </.link>
-                  <button
-                    phx-click="close-terminal"
-                    phx-value-terminal-id={tid}
-                    class="flex-shrink-0 p-2 mr-2 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all duration-200 rounded-lg hover:bg-red-900/20"
-                    title="Close terminal"
-                  >
-                    <.icon name="hero-x-mark" class="w-4 h-4" />
-                  </button>
                 </div>
               <% end %>
             <% end %>
           <% else %>
             <div class="px-4 py-12 text-center">
               <div class="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center mx-auto mb-4">
-                <.icon name="hero-command-line" class="w-8 h-8 text-gray-500" />
+                <.icon name="hero-folder" class="w-8 h-8 text-gray-500" />
               </div>
-              <p class="text-sm font-medium text-gray-400">No active terminals</p>
-              <p class="text-xs text-gray-500 mt-2">Create terminals from the dashboard</p>
+              <p class="text-sm font-medium text-gray-400">No workspaces open</p>
+              <p class="text-xs text-gray-500 mt-2">Open a workspace from the dashboard</p>
             </div>
           <% end %>
         </div>
-        
-    <!-- Bottom navigation -->
         <div class="border-t border-gray-800/50 p-4">
           <%= if @sidebar_collapsed do %>
             <.link
@@ -521,34 +632,57 @@ defmodule ClaudeLiveWeb.TerminalLive do
           <% end %>
         </div>
       </div>
-      
-    <!-- Terminal Content -->
       <div class="flex-1 flex flex-col">
-        <div class="bg-gray-900/80 backdrop-blur-sm px-6 py-3 border-b border-gray-800/50 flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <div class="flex items-center space-x-3">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
-                <.icon name="hero-command-line" class="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h2 class="text-white font-bold">{@terminal.name}</h2>
-                <div class="flex items-center gap-2 text-xs">
-                  <span class="text-emerald-400">{@terminal.worktree_branch}</span>
-                  <span class="text-gray-600">•</span>
-                  <span class="text-gray-500 truncate max-w-md">
-                    {@terminal.worktree_path}
-                  </span>
+        <div class="bg-gray-950 border-b border-gray-800/50">
+          <div class="flex items-center">
+            <div class="flex-1 flex items-center overflow-x-auto scrollbar-none">
+              <%= for {tid, terminal} <- @worktree_terminals do %>
+                <div class={[
+                  "flex items-center border-r border-gray-800/50 hover:bg-gray-900/50 transition-all duration-200 min-w-fit group relative",
+                  tid == @terminal_id && "bg-gray-900 border-b-2 border-b-emerald-500"
+                ]}>
+                  <.link navigate={~p"/terminals/#{tid}"} class="flex items-center px-4 py-2">
+                    <div class="flex items-center space-x-2">
+                      <span class={[
+                        "inline-block w-2 h-2 rounded-full flex-shrink-0",
+                        (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                      ]}>
+                      </span>
+                      <span class={[
+                        "text-sm whitespace-nowrap",
+                        (tid == @terminal_id && "text-white font-medium") || "text-gray-400"
+                      ]}>
+                        {terminal.name}
+                      </span>
+                    </div>
+                  </.link>
+                  <%= if map_size(@worktree_terminals) > 1 do %>
+                    <button
+                      phx-click="close-terminal"
+                      phx-value-terminal-id={tid}
+                      class="ml-1 mr-2 p-0.5 rounded hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <.icon name="hero-x-mark" class="w-3 h-3 text-gray-500 hover:text-gray-300" />
+                    </button>
+                  <% end %>
                 </div>
-              </div>
+              <% end %>
+              <button
+                phx-click="new-terminal"
+                class="flex items-center px-3 py-2 hover:bg-gray-900/50 transition-all duration-200 border-r border-gray-800/50 group"
+                title="New Terminal"
+              >
+                <.icon name="hero-plus" class="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+              </button>
             </div>
-            <div class="flex items-center gap-1 ml-4">
+            <div class="flex items-center px-3 space-x-2">
               <button
                 phx-click="open-in-iterm"
-                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors cursor-pointer"
+                class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
                 title="Open in iTerm2"
               >
                 <svg
-                  class="w-4 h-4 text-gray-400 hover:text-gray-200"
+                  class="w-4 h-4 text-gray-500 hover:text-gray-300"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -563,11 +697,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
               </button>
               <button
                 phx-click="open-in-zed"
-                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors cursor-pointer"
+                class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
                 title="Open in Zed"
               >
                 <svg
-                  class="w-4 h-4 text-gray-400 hover:text-gray-200"
+                  class="w-4 h-4 text-gray-500 hover:text-gray-300"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -582,11 +716,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
               </button>
               <.link
                 navigate={~p"/git-diff/terminal-#{@terminal_id}"}
-                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-800/50 transition-colors"
+                class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
                 title="View git diffs"
               >
                 <svg
-                  class="w-4 h-4 text-gray-400 hover:text-gray-200"
+                  class="w-4 h-4 text-gray-500 hover:text-gray-300"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -599,6 +733,25 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   />
                 </svg>
               </.link>
+            </div>
+          </div>
+        </div>
+        <div class="bg-gray-900/80 backdrop-blur-sm px-6 py-3 border-b border-gray-800/50 flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+                <.icon name="hero-command-line" class="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 class="text-white font-bold">{get_repository_name(@terminal)}</h2>
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="text-emerald-400">{@terminal.worktree_branch}</span>
+                  <span class="text-gray-600">•</span>
+                  <span class="text-gray-500 truncate max-w-md">
+                    {@terminal.worktree_path}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
           <div class="flex items-center space-x-4">
