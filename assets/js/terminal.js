@@ -92,6 +92,28 @@ export class TerminalManager {
       terminal.scrollToBottom();
     });
 
+    const scrollButton = document.getElementById('scroll-to-bottom');
+    if (scrollButton) {
+      const updateScrollButton = () => {
+        const buffer = terminal.buffer.active;
+        const scrollbackBuffer = buffer.baseY + buffer.cursorY;
+        const isAtBottom = buffer.viewportY >= scrollbackBuffer - terminal.rows + 1;
+        
+        if (isAtBottom) {
+          scrollButton.classList.add('hidden');
+        } else {
+          scrollButton.classList.remove('hidden');
+        }
+      };
+
+      terminal.onScroll(updateScrollButton);
+      
+      scrollButton.onclick = () => {
+        terminal.scrollToBottom();
+        terminal.focus();
+      };
+    }
+
     // Fit terminal to container
     fitAddon.fit();
 
@@ -134,6 +156,19 @@ export class TerminalManager {
         
         if (isAtBottom || shouldForceScroll) {
           terminal.scrollToBottom();
+        }
+        
+        const scrollButton = document.getElementById('scroll-to-bottom');
+        if (scrollButton) {
+          const bufferAfter = terminal.buffer.active;
+          const scrollbackBufferAfter = bufferAfter.baseY + bufferAfter.cursorY;
+          const isAtBottomAfter = bufferAfter.viewportY >= scrollbackBufferAfter - terminal.rows + 1;
+          
+          if (isAtBottomAfter) {
+            scrollButton.classList.add('hidden');
+          } else {
+            scrollButton.classList.remove('hidden');
+          }
         }
       }
     } else {

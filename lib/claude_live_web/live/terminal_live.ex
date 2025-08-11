@@ -632,6 +632,26 @@ defmodule ClaudeLiveWeb.TerminalLive do
                 <div id={"terminal-#{@terminal_id}"} class="h-full w-full"></div>
               </div>
             </div>
+
+            <button
+              id="scroll-to-bottom"
+              class="absolute bottom-6 right-6 hidden bg-gray-800/90 hover:bg-gray-700/90 text-white rounded-full p-3 shadow-lg backdrop-blur-sm border border-gray-600/50 transition-all duration-200 hover:scale-110 group"
+              title="Scroll to bottom"
+            >
+              <svg
+                class="w-5 h-5 group-hover:animate-bounce"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </div>
