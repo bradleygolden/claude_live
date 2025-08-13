@@ -110,6 +110,15 @@ const SidebarState = {
     this.handleEvent('store-sidebar-state', ({ collapsed }) => {
       localStorage.setItem('sidebar_collapsed', collapsed.toString())
     })
+    
+    this.handleEvent('load-expanded-projects', () => {
+      const expandedProjects = JSON.parse(localStorage.getItem('expanded_projects') || '[]')
+      this.pushEvent('expanded-projects-loaded', { expandedProjects })
+    })
+    
+    this.handleEvent('store-expanded-projects', ({ expandedProjects }) => {
+      localStorage.setItem('expanded_projects', JSON.stringify(expandedProjects))
+    })
   }
 }
 

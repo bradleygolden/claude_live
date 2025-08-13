@@ -296,12 +296,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
       all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
       projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
-      # Start with all projects expanded
-      all_project_ids =
-        projects_with_terminals
-        |> Enum.map(& &1.repository_id)
-        |> MapSet.new()
-
       socket =
         socket
         |> assign(:terminal_id, terminal_id)
@@ -313,10 +307,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:projects_with_terminals, projects_with_terminals)
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
-        |> assign(:expanded_projects, all_project_ids)
+        |> assign(:expanded_projects, MapSet.new())
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> push_event("load-sidebar-state", %{})
+        |> push_event("load-expanded-projects", %{})
 
       {:ok, socket}
     else
@@ -572,6 +567,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
     {:noreply, assign(socket, :sidebar_collapsed, collapsed)}
   end
 
+  def handle_event("expanded-projects-loaded", %{"expandedProjects" => expanded_list}, socket) do
+    expanded_set = MapSet.new(expanded_list)
+    {:noreply, assign(socket, :expanded_projects, expanded_set)}
+  end
+
   def handle_event("toggle-project", %{"project-id" => project_id}, socket) do
     expanded_projects = socket.assigns.expanded_projects
 
@@ -582,7 +582,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
         MapSet.put(expanded_projects, project_id)
       end
 
-    {:noreply, assign(socket, :expanded_projects, new_expanded)}
+    {:noreply,
+     socket
+     |> assign(:expanded_projects, new_expanded)
+     |> push_event("store-expanded-projects", %{expandedProjects: MapSet.to_list(new_expanded)})}
   end
 
   def handle_event("new-worktree", %{"repository-id" => repository_id}, socket) do
