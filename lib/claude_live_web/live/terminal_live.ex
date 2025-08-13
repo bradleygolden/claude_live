@@ -296,6 +296,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
       all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
       projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
+      initial_expanded =
+        if terminal.repository_id do
+          MapSet.new([terminal.repository_id])
+        else
+          MapSet.new()
+        end
+
       socket =
         socket
         |> assign(:terminal_id, terminal_id)
@@ -307,7 +314,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:projects_with_terminals, projects_with_terminals)
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
-        |> assign(:expanded_projects, MapSet.new())
+        |> assign(:expanded_projects, initial_expanded)
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> push_event("load-sidebar-state", %{})
@@ -584,7 +591,14 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   def handle_event("expanded-projects-loaded", %{"projects" => projects}, socket) do
-    {:noreply, assign(socket, :expanded_projects, MapSet.new(projects))}
+    current_expanded = socket.assigns.expanded_projects
+    loaded_expanded = MapSet.new(projects)
+    merged_expanded = MapSet.union(current_expanded, loaded_expanded)
+
+    {:noreply,
+     socket
+     |> assign(:expanded_projects, merged_expanded)
+     |> push_event("store-expanded-projects", %{projects: MapSet.to_list(merged_expanded)})}
   end
 
   def handle_event("new-worktree", %{"repository-id" => repository_id}, socket) do
@@ -832,7 +846,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   defp group_projects_and_terminals(repositories, terminals) do
-    # First, get all worktrees with terminals
     worktrees_with_terminals =
       terminals
       |> Enum.group_by(fn {_id, terminal} ->
@@ -853,27 +866,22 @@ defmodule ClaudeLiveWeb.TerminalLive do
         }
       end)
 
-    # Group worktrees by repository_id
     worktrees_by_repo =
       worktrees_with_terminals
       |> Enum.group_by(& &1.repository_id)
 
-    # Now create a complete list of all projects, including those without terminals
     repositories
     |> Enum.map(fn repository ->
       project_worktrees = Map.get(worktrees_by_repo, repository.id, [])
 
-      # Add worktrees from repository that don't have terminals yet
       all_worktrees =
         repository.worktrees
         |> Enum.map(fn worktree ->
-          # Check if this worktree already has terminals
           existing = Enum.find(project_worktrees, fn w -> w.worktree_id == worktree.id end)
 
           if existing do
             existing
           else
-            # Create a worktree entry without terminals
             %{
               worktree_id: worktree.id,
               branch: worktree.branch,
@@ -886,7 +894,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
           end
         end)
 
-      # If repository has no worktrees at all, use the worktrees with terminals
       final_worktrees = if Enum.empty?(all_worktrees), do: project_worktrees, else: all_worktrees
 
       total_terminals =
@@ -1415,21 +1422,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".ExpandedProjectsState">
       export default {
         mounted() {
-          const stored = localStorage.getItem('expandedProjects')
-          if (stored) {
-            try {
-              const projects = JSON.parse(stored)
-              this.pushEvent("expanded-projects-loaded", {projects: projects})
-            } catch (e) {
-              console.error("Failed to parse expanded projects from localStorage", e)
-            }
-          }
-
-          this.handleEvent("store-expanded-projects", ({projects}) => {
-            localStorage.setItem('expandedProjects', JSON.stringify(projects))
-          })
-
-          this.handleEvent("load-expanded-projects", () => {
+          const loadExpanded = () => {
             const stored = localStorage.getItem('expandedProjects')
             if (stored) {
               try {
@@ -1439,6 +1432,16 @@ defmodule ClaudeLiveWeb.TerminalLive do
                 console.error("Failed to parse expanded projects from localStorage", e)
               }
             }
+          }
+          
+          loadExpanded()
+
+          this.handleEvent("store-expanded-projects", ({projects}) => {
+            localStorage.setItem('expandedProjects', JSON.stringify(projects))
+          })
+
+          this.handleEvent("load-expanded-projects", () => {
+            loadExpanded()
           })
         }
       }
