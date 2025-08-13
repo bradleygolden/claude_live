@@ -312,7 +312,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> push_event("load-sidebar-state", %{})
-        |> push_event("load-expanded-projects", %{})
 
       {:ok, socket}
     else
@@ -595,10 +594,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         loaded_expanded
       end
 
-    {:noreply,
-     socket
-     |> assign(:expanded_projects, final_expanded)
-     |> push_event("store-expanded-projects", %{projects: MapSet.to_list(final_expanded)})}
+    {:noreply, assign(socket, :expanded_projects, final_expanded)}
   end
 
   def handle_event("new-worktree", %{"repository-id" => repository_id}, socket) do
@@ -1422,26 +1418,21 @@ defmodule ClaudeLiveWeb.TerminalLive do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".ExpandedProjectsState">
       export default {
         mounted() {
-          const loadExpanded = () => {
-            const stored = localStorage.getItem('expandedProjects')
-            if (stored) {
-              try {
-                const projects = JSON.parse(stored)
-                this.pushEvent("expanded-projects-loaded", {projects: projects})
-              } catch (e) {
-                console.error("Failed to parse expanded projects from localStorage", e)
-              }
+          const stored = localStorage.getItem('expandedProjects')
+          if (stored) {
+            try {
+              const projects = JSON.parse(stored)
+              this.pushEvent("expanded-projects-loaded", {projects: projects})
+            } catch (e) {
+              console.error("Failed to parse expanded projects from localStorage", e)
+              this.pushEvent("expanded-projects-loaded", {projects: []})
             }
+          } else {
+            this.pushEvent("expanded-projects-loaded", {projects: []})
           }
-          
-          loadExpanded()
 
           this.handleEvent("store-expanded-projects", ({projects}) => {
             localStorage.setItem('expandedProjects', JSON.stringify(projects))
-          })
-
-          this.handleEvent("load-expanded-projects", () => {
-            loadExpanded()
           })
         }
       }
