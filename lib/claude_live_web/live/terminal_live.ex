@@ -310,6 +310,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:expanded_projects, MapSet.new())
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
+        |> assign(:show_add_repo_dropdown, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -710,6 +711,53 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
+  def handle_event("toggle-add-repo-dropdown", _params, socket) do
+    {:noreply, assign(socket, :show_add_repo_dropdown, !socket.assigns.show_add_repo_dropdown)}
+  end
+
+  def handle_event("close-add-repo-dropdown", _params, socket) do
+    {:noreply, assign(socket, :show_add_repo_dropdown, false)}
+  end
+
+  def handle_event("archive-worktree", %{"worktree-id" => worktree_id}, socket) do
+    try do
+      worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id)
+
+      case Ash.destroy(worktree) do
+        :ok ->
+          # Refresh all data
+          all_terminals = ClaudeLive.TerminalManager.list_terminals()
+          all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+          projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
+
+          # Check if we're currently viewing the archived worktree
+          current_worktree_id = socket.assigns.terminal.worktree_id
+
+          if current_worktree_id == worktree_id do
+            # Redirect to dashboard if we archived the current worktree
+            {:noreply,
+             socket
+             |> put_flash(:info, "Worktree '#{worktree.branch}' has been archived")
+             |> push_navigate(to: ~p"/")}
+          else
+            # Just update the UI
+            {:noreply,
+             socket
+             |> assign(:projects_with_terminals, projects_with_terminals)
+             |> assign(:global_terminals, all_terminals)
+             |> put_flash(:info, "Worktree '#{worktree.branch}' has been archived")}
+          end
+
+        {:error, error} ->
+          {:noreply, put_flash(socket, :error, "Failed to archive worktree: #{inspect(error)}")}
+      end
+    rescue
+      _ ->
+        {:noreply, put_flash(socket, :error, "Worktree not found")}
+    end
+  end
+
+  @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     if session_id == socket.assigns.session_id do
       {:noreply, push_event(socket, "terminal_output", %{data: data})}
@@ -904,7 +952,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
           else
             %{
               worktree_id: worktree.id,
-              branch: worktree.branch,
+              branch: worktree.display_name || worktree.branch,
               path: worktree.path,
               repository_id: repository.id,
               terminals: %{},
@@ -996,6 +1044,48 @@ defmodule ClaudeLiveWeb.TerminalLive do
           </div>
         </div>
         <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
+          <%= unless @sidebar_collapsed do %>
+            <div class="mx-2 mb-2 relative" phx-click-away="close-add-repo-dropdown">
+              <button
+                phx-click="toggle-add-repo-dropdown"
+                class="w-full px-3 py-2 rounded-lg flex items-center justify-between transition-all duration-200 hover:bg-gray-800/50 group border border-dashed border-gray-700 hover:border-gray-600"
+                title="Add Repository"
+              >
+                <div class="flex items-center space-x-2">
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
+                    <.icon name="hero-plus" class="w-4 h-4 text-gray-400" />
+                  </div>
+                  <div class="text-sm font-medium text-gray-400">Add Repository</div>
+                </div>
+              </button>
+              <%= if assigns[:show_add_repo_dropdown] do %>
+                <div class="absolute left-0 right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-50">
+                  <.link
+                    navigate={~p"/dashboard/browse/directory"}
+                    class="flex items-center gap-3 px-4 py-3 hover:bg-gray-700/50 transition-colors text-gray-300 hover:text-gray-100 rounded-t-lg"
+                  >
+                    <.icon name="hero-folder-open" class="w-5 h-5 text-gray-400" />
+                    <div>
+                      <div class="text-sm font-medium">Add Local Repository</div>
+                      <div class="text-xs text-gray-500">Browse for existing Git repo</div>
+                    </div>
+                  </.link>
+                  <.link
+                    navigate={~p"/dashboard/clone/github"}
+                    class="flex items-center gap-3 px-4 py-3 hover:bg-gray-700/50 transition-colors text-gray-300 hover:text-gray-100 rounded-b-lg border-t border-gray-700"
+                  >
+                    <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                    <div>
+                      <div class="text-sm font-medium">Clone from GitHub</div>
+                      <div class="text-xs text-gray-500">Clone a remote repository</div>
+                    </div>
+                  </.link>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
           <%= if length(@projects_with_terminals) > 0 do %>
             <%= if @sidebar_collapsed do %>
               <%= for project <- @projects_with_terminals do %>
@@ -1140,9 +1230,18 @@ defmodule ClaudeLiveWeb.TerminalLive do
                                 </span>
                               </div>
                             </.link>
+                            <!-- Archive button on hover -->
+                            <button
+                              phx-click="archive-worktree"
+                              phx-value-worktree-id={worktree.worktree_id}
+                              class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-red-600/80 text-gray-300 hover:text-white z-10"
+                              title="Archive worktree"
+                            >
+                              <.icon name="hero-archive-box" class="w-3 h-3" />
+                            </button>
                           </div>
                         <% else %>
-                          <div class="mb-1 rounded-lg hover:bg-gray-800/50 transition-all duration-200">
+                          <div class="mb-1 rounded-lg hover:bg-gray-800/50 transition-all duration-200 group relative">
                             <button
                               phx-click="create-terminal-for-worktree"
                               phx-value-worktree-id={worktree.worktree_id}
@@ -1159,6 +1258,15 @@ defmodule ClaudeLiveWeb.TerminalLive do
                                   No terminals
                                 </div>
                               </div>
+                            </button>
+                            <!-- Archive button on hover -->
+                            <button
+                              phx-click="archive-worktree"
+                              phx-value-worktree-id={worktree.worktree_id}
+                              class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-red-600/80 text-gray-300 hover:text-white z-10"
+                              title="Archive worktree"
+                            >
+                              <.icon name="hero-archive-box" class="w-3 h-3" />
                             </button>
                           </div>
                         <% end %>
@@ -1183,7 +1291,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
                                 autofocus
                               />
                               <%= for error <- @new_worktree_forms[project.repository_id][:branch].errors do %>
-                                <p class="mt-1 text-xs text-red-400">{error}</p>
+                                <p class="mt-1 text-xs text-red-400">
+                                  {case error do
+                                    {message, _opts} -> message
+                                    message when is_binary(message) -> message
+                                    _ -> to_string(error)
+                                  end}
+                                </p>
                               <% end %>
                             </div>
                             <div class="flex space-x-2">
@@ -1277,13 +1391,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
           </div>
           <div class="flex items-center space-x-4">
             <div class="flex items-center space-x-2">
-              <button
-                phx-click="open-in-iterm"
-                class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
+              <a
+                href={"iterm2://app/command?d=#{URI.encode(@terminal.worktree_path)}&c=#{URI.encode("cd #{@terminal.worktree_path} && claude code")}"}
+                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 title="Open in iTerm2"
               >
                 <svg
-                  class="w-4 h-4 text-gray-500 hover:text-gray-300"
+                  class="w-4 h-4 text-gray-500 dark:text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1295,14 +1409,14 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-              </button>
+              </a>
               <button
                 phx-click="open-in-zed"
-                class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
+                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                 title="Open in Zed"
               >
                 <svg
-                  class="w-4 h-4 text-gray-500 hover:text-gray-300"
+                  class="w-4 h-4 text-gray-500 dark:text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"

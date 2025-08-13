@@ -1054,7 +1054,13 @@ defmodule ClaudeLiveWeb.DashboardLive do
                         placeholder="Enter branch name"
                       />
                       <%= for error <- @new_worktree_form[:branch].errors do %>
-                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">
+                          {case error do
+                            {message, _opts} -> message
+                            message when is_binary(message) -> message
+                            _ -> to_string(error)
+                          end}
+                        </p>
                       <% end %>
                     </div>
                     <div class="flex gap-3">

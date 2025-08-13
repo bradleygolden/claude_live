@@ -12,6 +12,16 @@ defmodule ClaudeLive.Claude.Worktree do
       public? true
     end
 
+    attribute :directory_name, :string do
+      allow_nil? true
+      public? true
+    end
+
+    attribute :display_name, :string do
+      allow_nil? true
+      public? true
+    end
+
     attribute :path, :string do
       allow_nil? true
       public? true
@@ -34,26 +44,38 @@ defmodule ClaudeLive.Claude.Worktree do
 
     create :create do
       primary? true
-      accept [:branch, :repository_id]
+      accept [:branch, :repository_id, :directory_name, :display_name]
 
       change fn changeset, _context ->
+        # Set display_name to branch if not provided
+        display_name =
+          Ash.Changeset.get_attribute(changeset, :display_name) ||
+            Ash.Changeset.get_attribute(changeset, :branch)
+
+        changeset =
+          changeset
+          |> Ash.Changeset.change_attribute(:display_name, display_name)
+
         changeset
         |> Ash.Changeset.after_action(fn changeset, worktree ->
           repository = Ash.load!(worktree, :repository, authorize?: false).repository
 
-          case create_git_worktree(worktree.branch, repository.path) do
-            {:ok, worktree_path} ->
+          case create_git_worktree(worktree, repository.path) do
+            {:ok, worktree_path, directory_name} ->
               ClaudeLive.WorktreeDatabase.setup_worktree_database(worktree_path)
 
               updated_worktree =
                 worktree
-                |> Ash.Changeset.for_update(:update, %{path: worktree_path})
+                |> Ash.Changeset.for_update(:update, %{
+                  path: worktree_path,
+                  directory_name: directory_name
+                })
                 |> Ash.update!(authorize?: false)
 
               {:ok, updated_worktree}
 
             {:error, reason} when is_binary(reason) ->
-              {:error, Ash.Error.Unknown.exception(message: reason)}
+              {:error, Ash.Error.Unknown.exception(error: reason)}
 
             {:error, reason} ->
               {:error, reason}
@@ -71,15 +93,20 @@ defmodule ClaudeLive.Claude.Worktree do
         |> Ash.Changeset.before_action(fn changeset ->
           worktree = changeset.data
 
-          if worktree.path && File.exists?(worktree.path) do
+          # Try to remove the git worktree if path exists
+          # But don't fail the destroy if it's already gone
+          if worktree.path do
             repository = Ash.load!(worktree, :repository, authorize?: false).repository
 
+            # Attempt to remove git worktree, but don't block database deletion
             case remove_git_worktree(worktree.path, repository.path) do
               :ok ->
                 changeset
 
-              {:error, reason} ->
-                Ash.Changeset.add_error(changeset, error: reason)
+              {:error, _reason} ->
+                # Log the error but continue with destroy
+                # The worktree might already be gone
+                changeset
             end
           else
             changeset
@@ -89,43 +116,70 @@ defmodule ClaudeLive.Claude.Worktree do
     end
   end
 
-  defp create_git_worktree(branch, repository_path) do
+  defp create_git_worktree(worktree, repository_path) do
     with {_output, 0} <-
            System.cmd("git", ["fetch", "origin"], cd: repository_path, stderr_to_stdout: true) do
       repo_name = Path.basename(repository_path)
 
-      sanitized_branch = String.replace(branch, ~r/[^a-zA-Z0-9_-]/, "-")
-      worktree_name = "#{sanitized_branch}-#{:os.system_time(:second)}"
-
       claude_live_path =
         Path.join([System.user_home!(), "Development", "bradleygolden", "claude_live"])
 
-      worktree_path =
-        Path.join([
-          claude_live_path,
-          "repo",
-          repo_name,
-          worktree_name
-        ])
+      repo_base_path = Path.join([claude_live_path, "repo", repo_name])
 
+      # Generate collision-safe directory name
+      directory_name = generate_safe_directory_name(worktree.branch, repo_base_path)
+
+      worktree_path = Path.join(repo_base_path, directory_name)
       worktree_parent = Path.dirname(worktree_path)
       File.mkdir_p!(worktree_parent)
 
       default_branch = get_default_branch(repository_path)
 
       cmd = "git"
-      args = ["worktree", "add", "-b", branch, worktree_path, "origin/#{default_branch}"]
+      args = ["worktree", "add", "-b", worktree.branch, worktree_path, "origin/#{default_branch}"]
 
       case System.cmd(cmd, args, cd: repository_path, stderr_to_stdout: true) do
         {_output, 0} ->
-          {:ok, worktree_path}
+          {:ok, worktree_path, directory_name}
 
         {output, _status} ->
-          {:error, output}
+          cond do
+            String.contains?(output, ["already exists", "is not empty"]) ->
+              {:error,
+               "A worktree directory already exists at this location. This may be from a previously archived worktree. Please manually remove the directory or choose a different branch name."}
+
+            String.contains?(output, "already checked out") ->
+              {:error, "This branch is already checked out in another worktree."}
+
+            true ->
+              {:error, "Failed to create worktree: #{output}"}
+          end
       end
     else
       {output, _status} ->
         {:error, "Failed to fetch from origin: #{output}"}
+    end
+  end
+
+  defp generate_safe_directory_name(branch, repo_base_path) do
+    sanitized_branch = String.replace(branch, ~r/[^a-zA-Z0-9_-]/, "-")
+
+    # Try the branch name first
+    if !File.exists?(Path.join(repo_base_path, sanitized_branch)) do
+      sanitized_branch
+    else
+      # If collision, append number
+      find_next_available_name(sanitized_branch, repo_base_path)
+    end
+  end
+
+  defp find_next_available_name(base_name, repo_base_path, counter \\ 2) do
+    candidate = "#{base_name}-#{counter}"
+
+    if !File.exists?(Path.join(repo_base_path, candidate)) do
+      candidate
+    else
+      find_next_available_name(base_name, repo_base_path, counter + 1)
     end
   end
 

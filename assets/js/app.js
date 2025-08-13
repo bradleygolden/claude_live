@@ -137,7 +137,12 @@ const DashboardHooks = {
     
     // Handle open URL events
     this.handleEvent('open-url', ({ url }) => {
-      window.open(url, '_blank')
+      // For custom URL schemes like iterm2://, use location.href
+      if (url.startsWith('iterm2://') || url.startsWith('vscode://') || url.startsWith('zed://')) {
+        window.location.href = url
+      } else {
+        window.open(url, '_blank')
+      }
     })
     
     // Handle alert messages

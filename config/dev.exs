@@ -22,6 +22,12 @@ config :claude_live, ClaudeLiveWeb.Endpoint,
 config :claude_live, ClaudeLiveWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
+    notify: [
+      live_view: [
+        ~r"lib/claude_live_web/core_components.ex$",
+        ~r"lib/claude_live_web/(live|components)/.*\.(ex|heex)$"
+      ]
+    ],
     patterns: [
       ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
       ~r"priv/gettext/.*(po)$",
