@@ -673,6 +673,39 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
+  def handle_event("create-terminal-for-worktree", %{"worktree-id" => worktree_id}, socket) do
+    # Find the worktree from the projects_with_terminals
+    worktree_info =
+      socket.assigns.projects_with_terminals
+      |> Enum.flat_map(& &1.worktrees)
+      |> Enum.find(&(&1.worktree_id == worktree_id))
+
+    if worktree_info do
+      terminal_id = "#{worktree_id}-1"
+      session_id = "terminal-#{worktree_id}-1"
+
+      new_terminal = %{
+        id: terminal_id,
+        worktree_id: worktree_id,
+        worktree_branch: worktree_info.branch,
+        worktree_path: worktree_info.path,
+        repository_id: worktree_info.repository_id,
+        session_id: session_id,
+        connected: false,
+        name: "Terminal 1"
+      }
+
+      ClaudeLive.TerminalManager.upsert_terminal(terminal_id, new_terminal)
+
+      {:noreply,
+       socket
+       |> put_flash(:info, "Terminal created for '#{worktree_info.branch}'")
+       |> push_navigate(to: ~p"/terminals/#{terminal_id}")}
+    else
+      {:noreply, put_flash(socket, :error, "Worktree not found")}
+    end
+  end
+
   @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     if session_id == socket.assigns.session_id do
@@ -1107,7 +1140,11 @@ defmodule ClaudeLiveWeb.TerminalLive do
                           </div>
                         <% else %>
                           <div class="mb-1 rounded-lg hover:bg-gray-800/50 transition-all duration-200">
-                            <div class="px-3 py-2 flex items-center space-x-2">
+                            <button
+                              phx-click="create-terminal-for-worktree"
+                              phx-value-worktree-id={worktree.worktree_id}
+                              class="w-full px-3 py-2 flex items-center space-x-2 text-left"
+                            >
                               <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center flex-shrink-0">
                                 <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
                               </div>
@@ -1119,7 +1156,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                                   No terminals
                                 </div>
                               </div>
-                            </div>
+                            </button>
                           </div>
                         <% end %>
                       <% end %>
