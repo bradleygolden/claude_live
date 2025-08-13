@@ -296,6 +296,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
       all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
       projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
+      # Start with all projects expanded
+      all_project_ids =
+        projects_with_terminals
+        |> Enum.map(& &1.repository_id)
+        |> MapSet.new()
+
       socket =
         socket
         |> assign(:terminal_id, terminal_id)
@@ -307,8 +313,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:projects_with_terminals, projects_with_terminals)
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
-        |> assign(:expanded_projects, MapSet.new())
-        |> assign(:current_repository_id, terminal.repository_id)
+        |> assign(:expanded_projects, all_project_ids)
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> push_event("load-sidebar-state", %{})
@@ -577,24 +582,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         MapSet.put(expanded_projects, project_id)
       end
 
-    {:noreply,
-     socket
-     |> assign(:expanded_projects, new_expanded)
-     |> push_event("store-expanded-projects", %{projects: MapSet.to_list(new_expanded)})}
-  end
-
-  def handle_event("expanded-projects-loaded", %{"projects" => projects}, socket) do
-    loaded_expanded = MapSet.new(projects)
-
-    # Always include the current repository in expanded state
-    final_expanded =
-      if socket.assigns[:current_repository_id] do
-        MapSet.put(loaded_expanded, socket.assigns.current_repository_id)
-      else
-        loaded_expanded
-      end
-
-    {:noreply, assign(socket, :expanded_projects, final_expanded)}
+    {:noreply, assign(socket, :expanded_projects, new_expanded)}
   end
 
   def handle_event("new-worktree", %{"repository-id" => repository_id}, socket) do
@@ -923,7 +911,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
       class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex"
       phx-hook="SidebarState"
     >
-      <div id="expanded-projects-state" phx-hook="ExpandedProjectsState" class="hidden"></div>
       <div class={[
         "bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
         if @sidebar_collapsed do
@@ -1410,29 +1397,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
         mounted() {
           this.handleEvent("open-url", ({url}) => {
             window.location.href = url
-          })
-        }
-      }
-    </script>
-
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".ExpandedProjectsState">
-      export default {
-        mounted() {
-          const stored = localStorage.getItem('expandedProjects')
-          if (stored) {
-            try {
-              const projects = JSON.parse(stored)
-              this.pushEvent("expanded-projects-loaded", {projects: projects})
-            } catch (e) {
-              console.error("Failed to parse expanded projects from localStorage", e)
-              this.pushEvent("expanded-projects-loaded", {projects: []})
-            }
-          } else {
-            this.pushEvent("expanded-projects-loaded", {projects: []})
-          }
-
-          this.handleEvent("store-expanded-projects", ({projects}) => {
-            localStorage.setItem('expandedProjects', JSON.stringify(projects))
           })
         }
       }
