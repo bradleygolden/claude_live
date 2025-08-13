@@ -293,7 +293,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
         end
 
       all_terminals = ClaudeLive.TerminalManager.list_terminals()
-      worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+      all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+      projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
       socket =
         socket
@@ -303,7 +304,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:subscribed, false)
         |> assign(:page_title, "Terminal - #{terminal.name}")
         |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
-        |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+        |> assign(:projects_with_terminals, projects_with_terminals)
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
         |> assign(:expanded_projects, MapSet.new())
@@ -498,12 +499,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
             end
 
           all_terminals = ClaudeLive.TerminalManager.list_terminals()
-          worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+          all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+          projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
           {:noreply,
            socket
            |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
-           |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+           |> assign(:projects_with_terminals, projects_with_terminals)
            |> assign(:worktree_terminals, updated_worktree_terminals)}
         end
 
@@ -639,7 +641,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
     case AshPhoenix.Form.submit(form.source, params: params) do
       {:ok, worktree} ->
         all_terminals = ClaudeLive.TerminalManager.list_terminals()
-        worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+        all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+        projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
         terminal_id = "#{worktree.id}-1"
         session_id = "terminal-#{worktree.id}-1"
@@ -660,7 +663,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
         {:noreply,
          socket
-         |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+         |> assign(:projects_with_terminals, projects_with_terminals)
          |> assign(:show_worktree_form, nil)
          |> assign(:new_worktree_forms, new_forms)
          |> put_flash(:info, "Worktree '#{worktree.branch}' created successfully")
@@ -730,12 +733,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
       end
 
     all_terminals = ClaudeLive.TerminalManager.list_terminals()
-    worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+    all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+    projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
     {:noreply,
      socket
      |> assign(:worktree_terminals, worktree_terminals)
-     |> assign(:worktrees_with_terminals, worktrees_with_terminals)}
+     |> assign(:projects_with_terminals, projects_with_terminals)}
   end
 
   @impl true
@@ -748,12 +752,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
       end
 
     all_terminals = ClaudeLive.TerminalManager.list_terminals()
-    worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+    all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+    projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
     updated_socket =
       socket
       |> assign(:global_terminals, ClaudeLive.TerminalManager.list_terminals())
-      |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+      |> assign(:projects_with_terminals, projects_with_terminals)
       |> assign(:worktree_terminals, updated_worktree_terminals)
 
     if deleted_terminal_id == socket.assigns.terminal_id do
@@ -826,8 +831,9 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
-  defp group_terminals_by_worktree(terminals) do
-    worktrees_data =
+  defp group_projects_and_terminals(repositories, terminals) do
+    # First, get all worktrees with terminals
+    worktrees_with_terminals =
       terminals
       |> Enum.group_by(fn {_id, terminal} ->
         {terminal.worktree_id, terminal.worktree_branch, terminal.worktree_path}
@@ -841,29 +847,60 @@ defmodule ClaudeLiveWeb.TerminalLive do
           branch: branch,
           path: path,
           repository_id: first_terminal.repository_id,
-          repository_name: get_repository_name(first_terminal),
           terminals: terminal_map,
           terminal_count: map_size(terminal_map),
           has_connected: Enum.any?(terminal_map, fn {_id, t} -> t.connected end)
         }
       end)
 
-    worktrees_data
-    |> Enum.group_by(fn worktree ->
-      {worktree.repository_id, worktree.repository_name}
-    end)
-    |> Enum.map(fn {{repository_id, repository_name}, project_worktrees} ->
+    # Group worktrees by repository_id
+    worktrees_by_repo =
+      worktrees_with_terminals
+      |> Enum.group_by(& &1.repository_id)
+
+    # Now create a complete list of all projects, including those without terminals
+    repositories
+    |> Enum.map(fn repository ->
+      project_worktrees = Map.get(worktrees_by_repo, repository.id, [])
+
+      # Add worktrees from repository that don't have terminals yet
+      all_worktrees =
+        repository.worktrees
+        |> Enum.map(fn worktree ->
+          # Check if this worktree already has terminals
+          existing = Enum.find(project_worktrees, fn w -> w.worktree_id == worktree.id end)
+
+          if existing do
+            existing
+          else
+            # Create a worktree entry without terminals
+            %{
+              worktree_id: worktree.id,
+              branch: worktree.branch,
+              path: worktree.path,
+              repository_id: repository.id,
+              terminals: %{},
+              terminal_count: 0,
+              has_connected: false
+            }
+          end
+        end)
+
+      # If repository has no worktrees at all, use the worktrees with terminals
+      final_worktrees = if Enum.empty?(all_worktrees), do: project_worktrees, else: all_worktrees
+
       total_terminals =
-        Enum.reduce(project_worktrees, 0, fn w, acc -> acc + w.terminal_count end)
+        Enum.reduce(final_worktrees, 0, fn w, acc -> acc + w.terminal_count end)
 
       has_any_connected =
-        Enum.any?(project_worktrees, fn w -> w.has_connected end)
+        Enum.any?(final_worktrees, fn w -> w.has_connected end)
 
       %{
-        repository_id: repository_id,
-        repository_name: repository_name,
-        worktrees: Enum.sort_by(project_worktrees, & &1.branch),
-        worktree_count: length(project_worktrees),
+        repository_id: repository.id,
+        repository_name: repository.name,
+        repository_path: repository.path,
+        worktrees: Enum.sort_by(final_worktrees, & &1.branch),
+        worktree_count: length(final_worktrees),
         total_terminal_count: total_terminals,
         has_connected: has_any_connected
       }
@@ -908,7 +945,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     Projects
                   </h3>
                   <p class="text-xs text-gray-500 mt-2">
-                    {length(@worktrees_with_terminals)} project(s)
+                    {length(@projects_with_terminals)} project(s)
                   </p>
                 </div>
               <% end %>
@@ -933,32 +970,46 @@ defmodule ClaudeLiveWeb.TerminalLive do
           </div>
         </div>
         <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
-          <%= if length(@worktrees_with_terminals) > 0 do %>
+          <%= if length(@projects_with_terminals) > 0 do %>
             <%= if @sidebar_collapsed do %>
-              <%= for project <- @worktrees_with_terminals do %>
-                <% {first_worktree_id, _first_terminal} =
+              <%= for project <- @projects_with_terminals do %>
+                <% first_terminal =
                   project.worktrees
-                  |> List.first()
-                  |> Map.get(:terminals)
-                  |> Enum.at(0) %>
+                  |> Enum.find_value(fn w ->
+                    case Enum.at(w.terminals, 0) do
+                      {id, _terminal} -> id
+                      _ -> nil
+                    end
+                  end) %>
                 <div class="mx-2 mb-1 flex justify-center group relative">
-                  <.link
-                    navigate={~p"/terminals/#{first_worktree_id}"}
-                    class={[
-                      "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 relative",
-                      Enum.any?(project.worktrees, fn w -> w.worktree_id == @terminal.worktree_id end) &&
-                        "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-950/20",
-                      (!Enum.any?(project.worktrees, fn w ->
-                         w.worktree_id == @terminal.worktree_id
-                       end) &&
-                         (project.has_connected && "bg-gradient-to-br from-blue-600 to-indigo-700")) ||
-                        "bg-gradient-to-br from-gray-600 to-gray-700",
-                      "hover:scale-105"
-                    ]}
-                    title={project.repository_name}
-                  >
-                    <.icon name="hero-building-office-2" class="w-4 h-4 text-white" />
-                  </.link>
+                  <%= if first_terminal do %>
+                    <.link
+                      navigate={~p"/terminals/#{first_terminal}"}
+                      class={[
+                        "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 relative",
+                        Enum.any?(project.worktrees, fn w ->
+                          w.worktree_id == @terminal.worktree_id
+                        end) &&
+                          "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-950/20",
+                        (!Enum.any?(project.worktrees, fn w ->
+                           w.worktree_id == @terminal.worktree_id
+                         end) &&
+                           (project.has_connected && "bg-gradient-to-br from-blue-600 to-indigo-700")) ||
+                          "bg-gradient-to-br from-gray-600 to-gray-700",
+                        "hover:scale-105"
+                      ]}
+                      title={project.repository_name}
+                    >
+                      <.icon name="hero-building-office-2" class="w-4 h-4 text-white" />
+                    </.link>
+                  <% else %>
+                    <div
+                      class="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 relative bg-gradient-to-br from-gray-600 to-gray-700 hover:scale-105"
+                      title={project.repository_name}
+                    >
+                      <.icon name="hero-building-office-2" class="w-4 h-4 text-white" />
+                    </div>
+                  <% end %>
                   <div class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-40">
                     <div class="font-bold">{project.repository_name}</div>
                     <div class="text-gray-400">{project.worktree_count} worktree(s)</div>
@@ -967,7 +1018,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                 </div>
               <% end %>
             <% else %>
-              <%= for project <- @worktrees_with_terminals do %>
+              <%= for project <- @projects_with_terminals do %>
                 <div class="mx-2 mb-2">
                   <button
                     phx-click="toggle-project"
@@ -1021,46 +1072,66 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   <%= if MapSet.member?(@expanded_projects, project.repository_id || "unknown") do %>
                     <div class="ml-6 mt-1">
                       <%= for worktree <- project.worktrees do %>
-                        <% {first_terminal_id, _} = Enum.at(worktree.terminals, 0) %>
-                        <div class={[
-                          "mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
-                          worktree.worktree_id == @terminal.worktree_id &&
-                            "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30"
-                        ]}>
-                          <.link
-                            navigate={~p"/terminals/#{first_terminal_id}"}
-                            class="block px-3 py-2 transition-all duration-200 rounded-lg overflow-hidden"
-                          >
-                            <div class="flex items-center space-x-2">
-                              <div class={[
-                                "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                                (worktree.has_connected &&
-                                   "bg-gradient-to-br from-emerald-500 to-green-600") ||
-                                  "bg-gradient-to-br from-gray-600 to-gray-700"
-                              ]}>
+                        <% first_terminal = Enum.at(worktree.terminals, 0) %>
+                        <%= if first_terminal do %>
+                          <% {first_terminal_id, _} = first_terminal %>
+                          <div class={[
+                            "mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
+                            worktree.worktree_id == @terminal.worktree_id &&
+                              "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30"
+                          ]}>
+                            <.link
+                              navigate={~p"/terminals/#{first_terminal_id}"}
+                              class="block px-3 py-2 transition-all duration-200 rounded-lg overflow-hidden"
+                            >
+                              <div class="flex items-center space-x-2">
+                                <div class={[
+                                  "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                                  (worktree.has_connected &&
+                                     "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                                    "bg-gradient-to-br from-gray-600 to-gray-700"
+                                ]}>
+                                  <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
+                                </div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                  <div class={[
+                                    "text-sm font-medium truncate",
+                                    (worktree.has_connected && "text-white") || "text-gray-300"
+                                  ]}>
+                                    {worktree.branch}
+                                  </div>
+                                  <div class="text-xs text-gray-500 truncate">
+                                    {worktree.terminal_count} terminal{if worktree.terminal_count !=
+                                                                            1,
+                                                                          do: "s"}
+                                  </div>
+                                </div>
+                                <span class={[
+                                  "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                                  (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
+                                    "bg-gray-600"
+                                ]}>
+                                </span>
+                              </div>
+                            </.link>
+                          </div>
+                        <% else %>
+                          <div class="mb-1 rounded-lg hover:bg-gray-800/50 transition-all duration-200">
+                            <div class="px-3 py-2 flex items-center space-x-2">
+                              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center flex-shrink-0">
                                 <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
                               </div>
                               <div class="flex-1 min-w-0 overflow-hidden">
-                                <div class={[
-                                  "text-sm font-medium truncate",
-                                  (worktree.has_connected && "text-white") || "text-gray-300"
-                                ]}>
+                                <div class="text-sm font-medium truncate text-gray-400">
                                   {worktree.branch}
                                 </div>
                                 <div class="text-xs text-gray-500 truncate">
-                                  {worktree.terminal_count} terminal{if worktree.terminal_count != 1,
-                                    do: "s"}
+                                  No terminals
                                 </div>
                               </div>
-                              <span class={[
-                                "w-1.5 h-1.5 rounded-full flex-shrink-0",
-                                (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
-                                  "bg-gray-600"
-                              ]}>
-                              </span>
                             </div>
-                          </.link>
-                        </div>
+                          </div>
+                        <% end %>
                       <% end %>
 
                       <%= if @show_worktree_form == project.repository_id do %>
