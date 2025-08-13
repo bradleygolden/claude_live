@@ -19,6 +19,7 @@ defmodule ClaudeLiveWeb.GitDiffLive do
         |> assign(:expanded_files, MapSet.new())
         |> assign(:file_diffs, %{})
         |> assign(:auto_expand, false)
+        |> assign(:diff_mode, :origin)
         |> load_git_status()
 
       {:ok, socket}
@@ -85,6 +86,18 @@ defmodule ClaudeLiveWeb.GitDiffLive do
      |> assign(:file_diffs, %{})}
   end
 
+  @impl true
+  def handle_event("toggle-diff-mode", _params, socket) do
+    new_mode = if socket.assigns.diff_mode == :origin, do: :working, else: :origin
+
+    {:noreply,
+     socket
+     |> assign(:diff_mode, new_mode)
+     |> assign(:expanded_files, MapSet.new())
+     |> assign(:file_diffs, %{})
+     |> load_git_status()}
+  end
+
   defp get_worktree(worktree_id) do
     case worktree_id do
       "terminal-" <> terminal_id ->
@@ -123,7 +136,14 @@ defmodule ClaudeLiveWeb.GitDiffLive do
   defp load_git_status(socket) do
     worktree_path = socket.assigns.worktree.path
 
-    case ClaudeLive.GitDiff.get_status(worktree_path) do
+    result =
+      if socket.assigns.diff_mode == :origin do
+        ClaudeLive.GitDiff.get_status_against_origin(worktree_path)
+      else
+        ClaudeLive.GitDiff.get_status(worktree_path)
+      end
+
+    case result do
       {:ok, files} ->
         socket
         |> assign(:diff_files, files)
@@ -143,13 +163,14 @@ defmodule ClaudeLiveWeb.GitDiffLive do
   defp expand_all_files(socket) do
     worktree_path = socket.assigns.worktree.path
     viewer_id = "gitdiff-#{socket.assigns.worktree_id}"
+    mode = socket.assigns.diff_mode
 
     {expanded_files, file_diffs} =
       Enum.reduce(socket.assigns.diff_files, {MapSet.new(), %{}}, fn file, {exp_files, diffs} ->
         file_key = "#{viewer_id}:#{file.path}"
         exp_files = MapSet.put(exp_files, file_key)
 
-        diff_content = get_file_diff_content(worktree_path, file)
+        diff_content = get_file_diff_content(worktree_path, file, mode)
         diffs = if diff_content != "", do: Map.put(diffs, file_key, diff_content), else: diffs
         {exp_files, diffs}
       end)
@@ -163,11 +184,12 @@ defmodule ClaudeLiveWeb.GitDiffLive do
     worktree_path = socket.assigns.worktree.path
     viewer_id = "gitdiff-#{socket.assigns.worktree_id}"
     file_key = "#{viewer_id}:#{file_path}"
+    mode = socket.assigns.diff_mode
 
     file = Enum.find(socket.assigns.diff_files, &(&1.path == file_path))
 
     if file && MapSet.member?(socket.assigns.expanded_files, file_key) do
-      diff_content = get_file_diff_content(worktree_path, file)
+      diff_content = get_file_diff_content(worktree_path, file, mode)
 
       if diff_content != "" do
         file_diffs = Map.put(socket.assigns.file_diffs, file_key, diff_content)
@@ -180,25 +202,50 @@ defmodule ClaudeLiveWeb.GitDiffLive do
     end
   end
 
-  defp get_file_diff_content(worktree_path, file) do
+  defp get_file_diff_content(worktree_path, file, mode) do
     if file.status == :untracked do
       case ClaudeLive.GitDiff.get_untracked_file_content(worktree_path, file.path) do
         {:ok, content} -> content
         _ -> ""
       end
     else
-      case ClaudeLive.GitDiff.get_file_diff(worktree_path, file.path) do
-        {:ok, ""} ->
-          case ClaudeLive.GitDiff.get_file_diff(worktree_path, file.path, true) do
-            {:ok, diff} -> diff
-            _ -> ""
-          end
+      if mode == :origin do
+        case ClaudeLive.GitDiff.get_file_diff_against_origin(worktree_path, file.path) do
+          {:ok, ""} ->
+            case ClaudeLive.GitDiff.get_file_diff(worktree_path, file.path) do
+              {:ok, ""} ->
+                case ClaudeLive.GitDiff.get_file_diff(worktree_path, file.path, true) do
+                  {:ok, diff} -> diff
+                  _ -> ""
+                end
 
-        {:ok, diff} ->
-          diff
+              {:ok, diff} ->
+                diff
 
-        _ ->
-          ""
+              _ ->
+                ""
+            end
+
+          {:ok, diff} ->
+            diff
+
+          _ ->
+            ""
+        end
+      else
+        case ClaudeLive.GitDiff.get_file_diff(worktree_path, file.path) do
+          {:ok, ""} ->
+            case ClaudeLive.GitDiff.get_file_diff(worktree_path, file.path, true) do
+              {:ok, diff} -> diff
+              _ -> ""
+            end
+
+          {:ok, diff} ->
+            diff
+
+          _ ->
+            ""
+        end
       end
     end
   end
@@ -230,6 +277,28 @@ defmodule ClaudeLiveWeb.GitDiffLive do
               </div>
             </div>
             <div class="flex items-center space-x-2">
+              <button
+                phx-click="toggle-diff-mode"
+                class={[
+                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
+                  if @diff_mode == :origin do
+                    "bg-emerald-600/20 text-emerald-400 border border-emerald-600/30"
+                  else
+                    "bg-gray-800/50 hover:bg-gray-700/50 text-gray-300"
+                  end
+                ]}
+                title={
+                  if @diff_mode == :origin,
+                    do: "Showing changes vs origin branch",
+                    else: "Showing working directory changes"
+                }
+              >
+                <%= if @diff_mode == :origin do %>
+                  <.icon name="hero-arrow-path" class="w-3 h-3 inline mr-1" /> vs Origin
+                <% else %>
+                  <.icon name="hero-document-text" class="w-3 h-3 inline mr-1" /> Working Dir
+                <% end %>
+              </button>
               <button
                 phx-click="expand-all"
                 class="px-3 py-1.5 text-xs font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 rounded-lg transition-colors"

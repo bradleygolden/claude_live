@@ -27,6 +27,54 @@ defmodule ClaudeLive.GitDiff do
   end
 
   @doc """
+  Get the status of all files changed between origin and HEAD.
+  Returns a list of file statuses including both committed and uncommitted changes.
+  """
+  def get_status_against_origin(worktree_path) do
+    with {:ok, base_branch} <- get_base_branch(worktree_path) do
+      origin_changes =
+        case System.cmd("git", ["diff", "--name-status", "#{base_branch}..HEAD"],
+               cd: worktree_path,
+               stderr_to_stdout: true
+             ) do
+          {output, 0} ->
+            output
+            |> String.split("\n", trim: true)
+            |> Enum.map(&parse_diff_name_status/1)
+            |> Enum.reject(&is_nil/1)
+            |> Enum.map(fn file -> Map.put(file, :in_origin_diff, true) end)
+
+          _ ->
+            []
+        end
+
+      working_changes =
+        case System.cmd("git", ["status", "--porcelain", "-u"],
+               cd: worktree_path,
+               stderr_to_stdout: true
+             ) do
+          {output, 0} ->
+            output
+            |> String.split("\n", trim: true)
+            |> Enum.map(&parse_status_line/1)
+            |> Enum.reject(&is_nil/1)
+
+          _ ->
+            []
+        end
+
+      all_files =
+        Enum.reduce(working_changes, Map.new(origin_changes, &{&1.path, &1}), fn file, acc ->
+          Map.put(acc, file.path, file)
+        end)
+        |> Map.values()
+        |> Enum.sort_by(& &1.path)
+
+      {:ok, all_files}
+    end
+  end
+
+  @doc """
   Get the diff for a specific file.
   """
   def get_file_diff(worktree_path, file_path, staged \\ false) do
@@ -43,6 +91,24 @@ defmodule ClaudeLive.GitDiff do
 
       {error, _} ->
         {:error, error}
+    end
+  end
+
+  @doc """
+  Get the diff for a specific file against the origin branch.
+  """
+  def get_file_diff_against_origin(worktree_path, file_path) do
+    with {:ok, base_branch} <- get_base_branch(worktree_path) do
+      case System.cmd("git", ["diff", "#{base_branch}..HEAD", "--", file_path],
+             cd: worktree_path,
+             stderr_to_stdout: true
+           ) do
+        {output, 0} ->
+          {:ok, output}
+
+        {error, _} ->
+          {:error, error}
+      end
     end
   end
 
