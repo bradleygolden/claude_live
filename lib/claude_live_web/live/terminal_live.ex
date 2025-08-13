@@ -1257,47 +1257,26 @@ defmodule ClaudeLiveWeb.TerminalLive do
         </div>
       </div>
       <div class="flex-1 flex flex-col">
-        <div class="bg-gray-950 border-b border-gray-800/50">
-          <div class="flex items-center">
-            <div class="flex-1 flex items-center overflow-x-auto scrollbar-none">
-              <%= for {tid, terminal} <- @worktree_terminals do %>
-                <div class={[
-                  "flex items-center border-r border-gray-800/50 hover:bg-gray-900/50 transition-all duration-200 min-w-fit group relative",
-                  tid == @terminal_id && "bg-gray-900 border-b-2 border-b-emerald-500"
-                ]}>
-                  <.link navigate={~p"/terminals/#{tid}"} class="flex items-center px-4 py-2">
-                    <div class="flex items-center space-x-2">
-                      <span class={[
-                        "inline-block w-2 h-2 rounded-full flex-shrink-0",
-                        (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
-                      ]}>
-                      </span>
-                      <span class={[
-                        "text-sm whitespace-nowrap",
-                        (tid == @terminal_id && "text-white font-medium") || "text-gray-400"
-                      ]}>
-                        {terminal.name}
-                      </span>
-                    </div>
-                  </.link>
-                  <button
-                    phx-click="close-terminal"
-                    phx-value-terminal-id={tid}
-                    class="ml-1 mr-2 p-0.5 rounded hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <.icon name="hero-x-mark" class="w-3 h-3 text-gray-500 hover:text-gray-300" />
-                  </button>
+        <div class="bg-gray-900/80 backdrop-blur-sm px-6 py-3 border-b border-gray-800/50 flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-3">
+              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
+                <.icon name="hero-command-line" class="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 class="text-white font-bold">{get_repository_name(@terminal)}</h2>
+                <div class="flex items-center gap-2 text-xs">
+                  <span class="text-emerald-400">{@terminal.worktree_branch}</span>
+                  <span class="text-gray-600">•</span>
+                  <span class="text-gray-500 truncate max-w-md">
+                    {@terminal.worktree_path}
+                  </span>
                 </div>
-              <% end %>
-              <button
-                phx-click="new-terminal"
-                class="flex items-center px-3 py-2 hover:bg-gray-900/50 transition-all duration-200 border-r border-gray-800/50 group"
-                title="New Terminal"
-              >
-                <.icon name="hero-plus" class="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
-              </button>
+              </div>
             </div>
-            <div class="flex items-center px-3 space-x-2">
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
               <button
                 phx-click="open-in-iterm"
                 class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
@@ -1356,27 +1335,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
                 </svg>
               </.link>
             </div>
-          </div>
-        </div>
-        <div class="bg-gray-900/80 backdrop-blur-sm px-6 py-3 border-b border-gray-800/50 flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <div class="flex items-center space-x-3">
-              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
-                <.icon name="hero-command-line" class="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h2 class="text-white font-bold">{get_repository_name(@terminal)}</h2>
-                <div class="flex items-center gap-2 text-xs">
-                  <span class="text-emerald-400">{@terminal.worktree_branch}</span>
-                  <span class="text-gray-600">•</span>
-                  <span class="text-gray-500 truncate max-w-md">
-                    {@terminal.worktree_path}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="flex items-center space-x-4">
             <div class="flex items-center space-x-2">
               <span class={[
                 "inline-block w-2 h-2 rounded-full",
@@ -1390,6 +1348,48 @@ defmodule ClaudeLiveWeb.TerminalLive do
               ]}>
                 {if @terminal.connected, do: "Connected", else: "Disconnected"}
               </span>
+            </div>
+          </div>
+        </div>
+        <div class="bg-gray-950 border-b border-gray-800/50">
+          <div class="flex items-center">
+            <div class="flex-1 flex items-center overflow-x-auto scrollbar-none">
+              <%= for {tid, terminal} <- @worktree_terminals do %>
+                <div class={[
+                  "flex items-center border-r border-gray-800/50 hover:bg-gray-900/50 transition-all duration-200 min-w-fit group relative",
+                  tid == @terminal_id && "bg-gray-900 border-b-2 border-b-emerald-500"
+                ]}>
+                  <.link navigate={~p"/terminals/#{tid}"} class="flex items-center px-4 py-2">
+                    <div class="flex items-center space-x-2">
+                      <span class={[
+                        "inline-block w-2 h-2 rounded-full flex-shrink-0",
+                        (terminal.connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                      ]}>
+                      </span>
+                      <span class={[
+                        "text-sm whitespace-nowrap",
+                        (tid == @terminal_id && "text-white font-medium") || "text-gray-400"
+                      ]}>
+                        {terminal.name}
+                      </span>
+                    </div>
+                  </.link>
+                  <button
+                    phx-click="close-terminal"
+                    phx-value-terminal-id={tid}
+                    class="ml-1 mr-2 p-0.5 rounded hover:bg-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <.icon name="hero-x-mark" class="w-3 h-3 text-gray-500 hover:text-gray-300" />
+                  </button>
+                </div>
+              <% end %>
+              <button
+                phx-click="new-terminal"
+                class="flex items-center px-3 py-2 hover:bg-gray-900/50 transition-all duration-200 border-r border-gray-800/50 group"
+                title="New Terminal"
+              >
+                <.icon name="hero-plus" class="w-4 h-4 text-gray-500 group-hover:text-gray-300" />
+              </button>
             </div>
           </div>
         </div>
