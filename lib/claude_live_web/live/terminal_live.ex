@@ -296,6 +296,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
       all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
       projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
+      initial_expanded =
+        if terminal.repository_id do
+          MapSet.new([terminal.repository_id])
+        else
+          MapSet.new()
+        end
+
       socket =
         socket
         |> assign(:terminal_id, terminal_id)
@@ -307,7 +314,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:projects_with_terminals, projects_with_terminals)
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
-        |> assign(:expanded_projects, MapSet.new())
+        |> assign(:expanded_projects, initial_expanded)
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> push_event("load-sidebar-state", %{})
@@ -584,20 +591,14 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   def handle_event("expanded-projects-loaded", %{"projects" => projects}, socket) do
+    current_expanded = socket.assigns.expanded_projects
     loaded_expanded = MapSet.new(projects)
-
-    # Always include the current terminal's repository in expanded state
-    final_expanded =
-      if socket.assigns[:terminal] && socket.assigns.terminal.repository_id do
-        MapSet.put(loaded_expanded, socket.assigns.terminal.repository_id)
-      else
-        loaded_expanded
-      end
+    merged_expanded = MapSet.union(current_expanded, loaded_expanded)
 
     {:noreply,
      socket
-     |> assign(:expanded_projects, final_expanded)
-     |> push_event("store-expanded-projects", %{projects: MapSet.to_list(final_expanded)})}
+     |> assign(:expanded_projects, merged_expanded)
+     |> push_event("store-expanded-projects", %{projects: MapSet.to_list(merged_expanded)})}
   end
 
   def handle_event("new-worktree", %{"repository-id" => repository_id}, socket) do
