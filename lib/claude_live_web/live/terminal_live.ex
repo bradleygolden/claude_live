@@ -34,7 +34,9 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:worktrees_with_terminals, worktrees_with_terminals)
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
+        |> assign(:expanded_projects, MapSet.new())
         |> push_event("load-sidebar-state", %{})
+        |> push_event("load-expanded-projects", %{})
 
       {:ok, socket}
     else
@@ -289,6 +291,26 @@ defmodule ClaudeLiveWeb.TerminalLive do
     {:noreply, assign(socket, :sidebar_collapsed, collapsed)}
   end
 
+  def handle_event("toggle-project", %{"project-id" => project_id}, socket) do
+    expanded_projects = socket.assigns.expanded_projects
+
+    new_expanded =
+      if MapSet.member?(expanded_projects, project_id) do
+        MapSet.delete(expanded_projects, project_id)
+      else
+        MapSet.put(expanded_projects, project_id)
+      end
+
+    {:noreply,
+     socket
+     |> assign(:expanded_projects, new_expanded)
+     |> push_event("store-expanded-projects", %{projects: MapSet.to_list(new_expanded)})}
+  end
+
+  def handle_event("expanded-projects-loaded", %{"projects" => projects}, socket) do
+    {:noreply, assign(socket, :expanded_projects, MapSet.new(projects))}
+  end
+
   @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     if session_id == socket.assigns.session_id do
@@ -444,22 +466,45 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   defp group_terminals_by_worktree(terminals) do
-    terminals
-    |> Enum.group_by(fn {_id, terminal} ->
-      {terminal.worktree_id, terminal.worktree_branch, terminal.worktree_path}
+    worktrees_data =
+      terminals
+      |> Enum.group_by(fn {_id, terminal} ->
+        {terminal.worktree_id, terminal.worktree_branch, terminal.worktree_path}
+      end)
+      |> Enum.map(fn {{worktree_id, branch, path}, grouped_terminals} ->
+        terminal_map = Map.new(grouped_terminals)
+        first_terminal = elem(hd(grouped_terminals), 1)
+
+        %{
+          worktree_id: worktree_id,
+          branch: branch,
+          path: path,
+          repository_id: first_terminal.repository_id,
+          repository_name: get_repository_name(first_terminal),
+          terminals: terminal_map,
+          terminal_count: map_size(terminal_map),
+          has_connected: Enum.any?(terminal_map, fn {_id, t} -> t.connected end)
+        }
+      end)
+
+    worktrees_data
+    |> Enum.group_by(fn worktree ->
+      {worktree.repository_id, worktree.repository_name}
     end)
-    |> Enum.map(fn {{worktree_id, branch, path}, grouped_terminals} ->
-      terminal_map = Map.new(grouped_terminals)
-      first_terminal = elem(hd(grouped_terminals), 1)
+    |> Enum.map(fn {{repository_id, repository_name}, project_worktrees} ->
+      total_terminals =
+        Enum.reduce(project_worktrees, 0, fn w, acc -> acc + w.terminal_count end)
+
+      has_any_connected =
+        Enum.any?(project_worktrees, fn w -> w.has_connected end)
 
       %{
-        worktree_id: worktree_id,
-        branch: branch,
-        path: path,
-        repository_name: get_repository_name(first_terminal),
-        terminals: terminal_map,
-        terminal_count: map_size(terminal_map),
-        has_connected: Enum.any?(terminal_map, fn {_id, t} -> t.connected end)
+        repository_id: repository_id,
+        repository_name: repository_name,
+        worktrees: Enum.sort_by(project_worktrees, & &1.branch),
+        worktree_count: length(project_worktrees),
+        total_terminal_count: total_terminals,
+        has_connected: has_any_connected
       }
     end)
     |> Enum.sort_by(& &1.repository_name)
@@ -473,6 +518,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
       class="h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black flex"
       phx-hook="SidebarState"
     >
+      <div id="expanded-projects-state" phx-hook="ExpandedProjectsState" class="hidden"></div>
       <div class={[
         "bg-gray-900/95 backdrop-blur-sm border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out overflow-hidden",
         if @sidebar_collapsed do
@@ -494,10 +540,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <%= unless @sidebar_collapsed do %>
                 <div>
                   <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
-                    Workspaces
+                    Projects
                   </h3>
                   <p class="text-xs text-gray-500 mt-2">
-                    {length(@worktrees_with_terminals)} workspace(s)
+                    {length(@worktrees_with_terminals)} project(s)
                   </p>
                 </div>
               <% end %>
@@ -524,81 +570,135 @@ defmodule ClaudeLiveWeb.TerminalLive do
         <div class="flex-1 overflow-y-auto overflow-x-hidden py-2">
           <%= if length(@worktrees_with_terminals) > 0 do %>
             <%= if @sidebar_collapsed do %>
-              <%= for worktree <- @worktrees_with_terminals do %>
-                <% {first_terminal_id, _} = Enum.at(worktree.terminals, 0) %>
+              <%= for project <- @worktrees_with_terminals do %>
+                <% {first_worktree_id, _first_terminal} =
+                  project.worktrees
+                  |> List.first()
+                  |> Map.get(:terminals)
+                  |> Enum.at(0) %>
                 <div class="mx-2 mb-1 flex justify-center group relative">
                   <.link
-                    navigate={~p"/terminals/#{first_terminal_id}"}
+                    navigate={~p"/terminals/#{first_worktree_id}"}
                     class={[
                       "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 relative",
-                      worktree.worktree_id == @terminal.worktree_id &&
-                        "bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-950/20",
-                      (worktree.worktree_id != @terminal.worktree_id &&
-                         (worktree.has_connected && "bg-gradient-to-br from-emerald-600 to-green-700")) ||
+                      Enum.any?(project.worktrees, fn w -> w.worktree_id == @terminal.worktree_id end) &&
+                        "bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-950/20",
+                      (!Enum.any?(project.worktrees, fn w ->
+                         w.worktree_id == @terminal.worktree_id
+                       end) &&
+                         (project.has_connected && "bg-gradient-to-br from-blue-600 to-indigo-700")) ||
                         "bg-gradient-to-br from-gray-600 to-gray-700",
                       "hover:scale-105"
                     ]}
-                    title={worktree.repository_name}
+                    title={project.repository_name}
                   >
-                    <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
+                    <.icon name="hero-building-office-2" class="w-4 h-4 text-white" />
                   </.link>
                   <div class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-40">
-                    <div class="font-bold">{worktree.branch}</div>
-                    <div class="text-gray-400">{worktree.repository_name}</div>
-                    <div class="text-gray-500">{worktree.terminal_count} terminal(s)</div>
+                    <div class="font-bold">{project.repository_name}</div>
+                    <div class="text-gray-400">{project.worktree_count} worktree(s)</div>
+                    <div class="text-gray-500">{project.total_terminal_count} terminal(s)</div>
                   </div>
                 </div>
               <% end %>
             <% else %>
-              <%= for worktree <- @worktrees_with_terminals do %>
-                <% {first_terminal_id, _} = Enum.at(worktree.terminals, 0) %>
-                <div class={[
-                  "mx-2 mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
-                  worktree.worktree_id == @terminal.worktree_id &&
-                    "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30 shadow-lg shadow-emerald-950/20"
-                ]}>
-                  <.link
-                    navigate={~p"/terminals/#{first_terminal_id}"}
-                    class="block px-4 py-3 transition-all duration-200 rounded-lg overflow-hidden"
+              <%= for project <- @worktrees_with_terminals do %>
+                <div class="mx-2 mb-2">
+                  <button
+                    phx-click="toggle-project"
+                    phx-value-project-id={project.repository_id || "unknown"}
+                    class={[
+                      "w-full px-3 py-2 rounded-lg flex items-center justify-between transition-all duration-200 hover:bg-gray-800/50 group",
+                      Enum.any?(project.worktrees, fn w -> w.worktree_id == @terminal.worktree_id end) &&
+                        "bg-gradient-to-r from-blue-950/30 to-indigo-950/30"
+                    ]}
                   >
-                    <div class="flex items-center space-x-3">
+                    <div class="flex items-center space-x-2 flex-1 min-w-0">
+                      <.icon
+                        name={
+                          if MapSet.member?(@expanded_projects, project.repository_id || "unknown") do
+                            "hero-chevron-down"
+                          else
+                            "hero-chevron-right"
+                          end
+                        }
+                        class="w-4 h-4 text-gray-400 flex-shrink-0"
+                      />
                       <div class={[
-                        "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                        (worktree.has_connected && "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                        "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                        (project.has_connected && "bg-gradient-to-br from-blue-500 to-indigo-600") ||
                           "bg-gradient-to-br from-gray-600 to-gray-700"
                       ]}>
-                        <.icon name="hero-folder-open" class="w-5 h-5 text-white" />
+                        <.icon name="hero-building-office-2" class="w-4 h-4 text-white" />
                       </div>
-                      <div class="flex-1 min-w-0 overflow-hidden">
+                      <div class="flex-1 min-w-0 text-left">
                         <div class={[
                           "text-sm font-bold truncate",
-                          (worktree.has_connected && "text-white") || "text-gray-300"
+                          (project.has_connected && "text-white") || "text-gray-300"
                         ]}>
-                          {worktree.branch}
+                          {project.repository_name}
                         </div>
-                        <div class="text-xs text-gray-400 truncate mt-0.5">
-                          {worktree.repository_name}
-                        </div>
-                        <div class="text-xs text-gray-500 truncate mt-0.5">
-                          {worktree.terminal_count} terminal{if worktree.terminal_count != 1, do: "s"}
-                        </div>
-                        <div class="flex items-center gap-1 mt-1">
-                          <span class={[
-                            "w-1.5 h-1.5 rounded-full",
-                            (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
-                              "bg-gray-600"
-                          ]}>
-                          </span>
-                          <span class={[
-                            "text-xs",
-                            (worktree.has_connected && "text-emerald-400") || "text-gray-500"
-                          ]}>
-                            {(worktree.has_connected && "Active") || "Inactive"}
-                          </span>
+                        <div class="text-xs text-gray-500">
+                          {project.worktree_count} worktree{if project.worktree_count != 1, do: "s"}, {project.total_terminal_count} terminal{if project.total_terminal_count !=
+                                                                                                                                                   1,
+                                                                                                                                                 do:
+                                                                                                                                                   "s"}
                         </div>
                       </div>
                     </div>
-                  </.link>
+                    <span class={[
+                      "w-2 h-2 rounded-full flex-shrink-0",
+                      (project.has_connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
+                    ]}>
+                    </span>
+                  </button>
+
+                  <%= if MapSet.member?(@expanded_projects, project.repository_id || "unknown") do %>
+                    <div class="ml-6 mt-1">
+                      <%= for worktree <- project.worktrees do %>
+                        <% {first_terminal_id, _} = Enum.at(worktree.terminals, 0) %>
+                        <div class={[
+                          "mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
+                          worktree.worktree_id == @terminal.worktree_id &&
+                            "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30"
+                        ]}>
+                          <.link
+                            navigate={~p"/terminals/#{first_terminal_id}"}
+                            class="block px-3 py-2 transition-all duration-200 rounded-lg overflow-hidden"
+                          >
+                            <div class="flex items-center space-x-2">
+                              <div class={[
+                                "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                                (worktree.has_connected &&
+                                   "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                                  "bg-gradient-to-br from-gray-600 to-gray-700"
+                              ]}>
+                                <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
+                              </div>
+                              <div class="flex-1 min-w-0 overflow-hidden">
+                                <div class={[
+                                  "text-sm font-medium truncate",
+                                  (worktree.has_connected && "text-white") || "text-gray-300"
+                                ]}>
+                                  {worktree.branch}
+                                </div>
+                                <div class="text-xs text-gray-500 truncate">
+                                  {worktree.terminal_count} terminal{if worktree.terminal_count != 1,
+                                    do: "s"}
+                                </div>
+                              </div>
+                              <span class={[
+                                "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                                (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
+                                  "bg-gray-600"
+                              ]}>
+                              </span>
+                            </div>
+                          </.link>
+                        </div>
+                      <% end %>
+                    </div>
+                  <% end %>
                 </div>
               <% end %>
             <% end %>
@@ -813,6 +913,38 @@ defmodule ClaudeLiveWeb.TerminalLive do
         mounted() {
           this.handleEvent("open-url", ({url}) => {
             window.location.href = url
+          })
+        }
+      }
+    </script>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".ExpandedProjectsState">
+      export default {
+        mounted() {
+          const stored = localStorage.getItem('expandedProjects')
+          if (stored) {
+            try {
+              const projects = JSON.parse(stored)
+              this.pushEvent("expanded-projects-loaded", {projects: projects})
+            } catch (e) {
+              console.error("Failed to parse expanded projects from localStorage", e)
+            }
+          }
+
+          this.handleEvent("store-expanded-projects", ({projects}) => {
+            localStorage.setItem('expandedProjects', JSON.stringify(projects))
+          })
+
+          this.handleEvent("load-expanded-projects", () => {
+            const stored = localStorage.getItem('expandedProjects')
+            if (stored) {
+              try {
+                const projects = JSON.parse(stored)
+                this.pushEvent("expanded-projects-loaded", {projects: projects})
+              } catch (e) {
+                console.error("Failed to parse expanded projects from localStorage", e)
+              }
+            }
           })
         }
       }
