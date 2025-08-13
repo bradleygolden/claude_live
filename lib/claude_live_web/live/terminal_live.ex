@@ -6,6 +6,278 @@ defmodule ClaudeLiveWeb.TerminalLive do
   use ClaudeLiveWeb, :live_view
   require Logger
 
+  @us_cities [
+    "Aberdeen",
+    "Abilene",
+    "Akron",
+    "Albany",
+    "Alexandria",
+    "Allentown",
+    "Amarillo",
+    "Anaheim",
+    "Anchorage",
+    "Arlington",
+    "Asheville",
+    "Athens",
+    "Atlanta",
+    "Auburn",
+    "Augusta",
+    "Austin",
+    "Bakersfield",
+    "Baltimore",
+    "Bangor",
+    "Baton-Rouge",
+    "Beaumont",
+    "Bellevue",
+    "Berkeley",
+    "Bethlehem",
+    "Birmingham",
+    "Bloomington",
+    "Boise",
+    "Boston",
+    "Boulder",
+    "Bridgeport",
+    "Brooklyn",
+    "Buffalo",
+    "Burlington",
+    "Cambridge",
+    "Camden",
+    "Canton",
+    "Carlsbad",
+    "Carrollton",
+    "Cary",
+    "Cedar-Rapids",
+    "Centennial",
+    "Chandler",
+    "Charleston",
+    "Charlotte",
+    "Chattanooga",
+    "Chesapeake",
+    "Chicago",
+    "Cincinnati",
+    "Clearwater",
+    "Cleveland",
+    "Columbia",
+    "Columbus",
+    "Concord",
+    "Coral-Springs",
+    "Corona",
+    "Costa-Mesa",
+    "Dallas",
+    "Dayton",
+    "Denver",
+    "Des-Moines",
+    "Detroit",
+    "Durham",
+    "Edison",
+    "El-Paso",
+    "Elizabeth",
+    "Elk-Grove",
+    "Erie",
+    "Escondido",
+    "Eugene",
+    "Evansville",
+    "Everett",
+    "Fairfield",
+    "Fargo",
+    "Fayetteville",
+    "Flint",
+    "Fontana",
+    "Fort-Collins",
+    "Fort-Lauderdale",
+    "Fort-Wayne",
+    "Fort-Worth",
+    "Fremont",
+    "Fresno",
+    "Frisco",
+    "Fullerton",
+    "Gainesville",
+    "Garden-Grove",
+    "Garland",
+    "Gilbert",
+    "Glendale",
+    "Grand-Prairie",
+    "Grand-Rapids",
+    "Greensboro",
+    "Hampton",
+    "Hartford",
+    "Hayward",
+    "Henderson",
+    "Hialeah",
+    "Hillsboro",
+    "Hollywood",
+    "Honolulu",
+    "Houston",
+    "Huntington",
+    "Huntsville",
+    "Independence",
+    "Indianapolis",
+    "Inglewood",
+    "Irvine",
+    "Irving",
+    "Jackson",
+    "Jacksonville",
+    "Jersey-City",
+    "Joliet",
+    "Kansas-City",
+    "Kent",
+    "Killeen",
+    "Knoxville",
+    "Lafayette",
+    "Lakeland",
+    "Lakewood",
+    "Lancaster",
+    "Lansing",
+    "Laredo",
+    "Las-Vegas",
+    "Lewisville",
+    "Lexington",
+    "Lincoln",
+    "Little-Rock",
+    "Long-Beach",
+    "Los-Angeles",
+    "Louisville",
+    "Lowell",
+    "Lubbock",
+    "Lynchburg",
+    "Madison",
+    "Manchester",
+    "McAllen",
+    "McKinney",
+    "Memphis",
+    "Mesa",
+    "Mesquite",
+    "Miami",
+    "Midland",
+    "Milwaukee",
+    "Minneapolis",
+    "Miramar",
+    "Mobile",
+    "Modesto",
+    "Montgomery",
+    "Moreno-Valley",
+    "Murfreesboro",
+    "Murrieta",
+    "Naperville",
+    "Nashville",
+    "New-Haven",
+    "New-Orleans",
+    "New-York",
+    "Newark",
+    "Newport",
+    "Norfolk",
+    "Norman",
+    "North-Charleston",
+    "Norwalk",
+    "Oakland",
+    "Oceanside",
+    "Odessa",
+    "Oklahoma-City",
+    "Olathe",
+    "Omaha",
+    "Ontario",
+    "Orange",
+    "Orlando",
+    "Overland-Park",
+    "Oxnard",
+    "Palm-Bay",
+    "Palmdale",
+    "Pasadena",
+    "Paterson",
+    "Pearland",
+    "Pembroke-Pines",
+    "Peoria",
+    "Philadelphia",
+    "Phoenix",
+    "Pittsburgh",
+    "Plano",
+    "Pomona",
+    "Pompano-Beach",
+    "Port-St-Lucie",
+    "Portland",
+    "Providence",
+    "Provo",
+    "Pueblo",
+    "Raleigh",
+    "Rancho-Cucamonga",
+    "Reno",
+    "Richardson",
+    "Richmond",
+    "Riverside",
+    "Rochester",
+    "Rockford",
+    "Roseville",
+    "Round-Rock",
+    "Sacramento",
+    "Salem",
+    "Salinas",
+    "Salt-Lake-City",
+    "San-Antonio",
+    "San-Bernardino",
+    "San-Diego",
+    "San-Francisco",
+    "San-Jose",
+    "San-Mateo",
+    "Sandy-Springs",
+    "Santa-Ana",
+    "Santa-Clara",
+    "Santa-Clarita",
+    "Santa-Maria",
+    "Santa-Rosa",
+    "Savannah",
+    "Scottsdale",
+    "Seattle",
+    "Shreveport",
+    "Simi-Valley",
+    "Sioux-Falls",
+    "South-Bend",
+    "Spokane",
+    "Springfield",
+    "St-Louis",
+    "St-Paul",
+    "St-Petersburg",
+    "Stamford",
+    "Sterling-Heights",
+    "Stockton",
+    "Sunnyvale",
+    "Surprise",
+    "Syracuse",
+    "Tacoma",
+    "Tallahassee",
+    "Tampa",
+    "Temecula",
+    "Tempe",
+    "Thornton",
+    "Thousand-Oaks",
+    "Toledo",
+    "Topeka",
+    "Torrance",
+    "Tucson",
+    "Tulsa",
+    "Tyler",
+    "Vallejo",
+    "Vancouver",
+    "Ventura",
+    "Victorville",
+    "Virginia-Beach",
+    "Visalia",
+    "Waco",
+    "Warren",
+    "Washington",
+    "Waterbury",
+    "West-Covina",
+    "West-Jordan",
+    "West-Palm-Beach",
+    "West-Valley-City",
+    "Westminster",
+    "Wichita",
+    "Wichita-Falls",
+    "Wilmington",
+    "Winston-Salem",
+    "Worcester",
+    "Yonkers"
+  ]
+
   @impl true
   def mount(%{"terminal_id" => terminal_id}, _session, socket) do
     terminal = ClaudeLive.TerminalManager.get_terminal(terminal_id)
@@ -35,6 +307,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:worktree_terminals, worktree_terminals)
         |> assign(:sidebar_collapsed, false)
         |> assign(:expanded_projects, MapSet.new())
+        |> assign(:show_worktree_form, nil)
+        |> assign(:new_worktree_forms, %{})
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -311,6 +585,93 @@ defmodule ClaudeLiveWeb.TerminalLive do
     {:noreply, assign(socket, :expanded_projects, MapSet.new(projects))}
   end
 
+  def handle_event("new-worktree", %{"repository-id" => repository_id}, socket) do
+    branch_name = generate_branch_name()
+
+    form =
+      ClaudeLive.Claude.Worktree
+      |> AshPhoenix.Form.for_create(:create,
+        params: %{
+          repository_id: repository_id,
+          branch: branch_name
+        },
+        as: "worktree"
+      )
+      |> to_form()
+
+    new_forms = Map.put(socket.assigns.new_worktree_forms, repository_id, form)
+
+    {:noreply,
+     socket
+     |> assign(:show_worktree_form, repository_id)
+     |> assign(:new_worktree_forms, new_forms)}
+  end
+
+  def handle_event("cancel-new-worktree", %{"repository-id" => repository_id}, socket) do
+    new_forms = Map.delete(socket.assigns.new_worktree_forms, repository_id)
+
+    {:noreply,
+     socket
+     |> assign(:show_worktree_form, nil)
+     |> assign(:new_worktree_forms, new_forms)}
+  end
+
+  def handle_event(
+        "validate-worktree",
+        %{"repository-id" => repository_id, "worktree" => params},
+        socket
+      ) do
+    form = socket.assigns.new_worktree_forms[repository_id]
+    validated_form = AshPhoenix.Form.validate(form.source, params) |> to_form()
+    new_forms = Map.put(socket.assigns.new_worktree_forms, repository_id, validated_form)
+
+    {:noreply, assign(socket, :new_worktree_forms, new_forms)}
+  end
+
+  def handle_event(
+        "create-worktree",
+        %{"repository-id" => repository_id, "worktree" => params},
+        socket
+      ) do
+    params = Map.put(params, "repository_id", repository_id)
+    form = socket.assigns.new_worktree_forms[repository_id]
+
+    case AshPhoenix.Form.submit(form.source, params: params) do
+      {:ok, worktree} ->
+        all_terminals = ClaudeLive.TerminalManager.list_terminals()
+        worktrees_with_terminals = group_terminals_by_worktree(all_terminals)
+
+        terminal_id = "#{worktree.id}-1"
+        session_id = "terminal-#{worktree.id}-1"
+
+        new_terminal = %{
+          id: terminal_id,
+          worktree_id: worktree.id,
+          worktree_branch: worktree.branch,
+          worktree_path: worktree.path,
+          repository_id: worktree.repository_id,
+          session_id: session_id,
+          connected: false,
+          name: "Terminal 1"
+        }
+
+        ClaudeLive.TerminalManager.upsert_terminal(terminal_id, new_terminal)
+        new_forms = Map.delete(socket.assigns.new_worktree_forms, repository_id)
+
+        {:noreply,
+         socket
+         |> assign(:worktrees_with_terminals, worktrees_with_terminals)
+         |> assign(:show_worktree_form, nil)
+         |> assign(:new_worktree_forms, new_forms)
+         |> put_flash(:info, "Worktree '#{worktree.branch}' created successfully")
+         |> push_navigate(to: ~p"/terminals/#{terminal_id}")}
+
+      {:error, form} ->
+        new_forms = Map.put(socket.assigns.new_worktree_forms, repository_id, to_form(form))
+        {:noreply, assign(socket, :new_worktree_forms, new_forms)}
+    end
+  end
+
   @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     if session_id == socket.assigns.session_id do
@@ -510,6 +871,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
     |> Enum.sort_by(& &1.repository_name)
   end
 
+  defp generate_branch_name do
+    Enum.random(@us_cities) |> String.downcase()
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -696,6 +1061,64 @@ defmodule ClaudeLiveWeb.TerminalLive do
                             </div>
                           </.link>
                         </div>
+                      <% end %>
+
+                      <%= if @show_worktree_form == project.repository_id do %>
+                        <div class="mb-1 p-3 bg-gray-900/50 rounded-lg border border-gray-700/50">
+                          <.form
+                            for={@new_worktree_forms[project.repository_id]}
+                            phx-submit="create-worktree"
+                            phx-change="validate-worktree"
+                            class="space-y-2"
+                          >
+                            <input type="hidden" name="repository-id" value={project.repository_id} />
+                            <div>
+                              <input
+                                type="text"
+                                name={@new_worktree_forms[project.repository_id][:branch].name}
+                                value={@new_worktree_forms[project.repository_id][:branch].value}
+                                class="w-full px-2 py-1 text-sm border border-gray-600 rounded bg-gray-800 text-gray-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                                placeholder="Branch name"
+                                autofocus
+                              />
+                              <%= for error <- @new_worktree_forms[project.repository_id][:branch].errors do %>
+                                <p class="mt-1 text-xs text-red-400">{error}</p>
+                              <% end %>
+                            </div>
+                            <div class="flex space-x-2">
+                              <button
+                                type="submit"
+                                class="flex-1 px-2 py-1 text-xs bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-medium rounded transition-all duration-200"
+                              >
+                                Create
+                              </button>
+                              <button
+                                type="button"
+                                phx-click="cancel-new-worktree"
+                                phx-value-repository-id={project.repository_id}
+                                class="flex-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium rounded transition-all duration-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </.form>
+                        </div>
+                      <% else %>
+                        <button
+                          phx-click="new-worktree"
+                          phx-value-repository-id={project.repository_id}
+                          class="w-full mb-1 px-3 py-2 flex items-center space-x-2 rounded-lg hover:bg-gray-800/50 transition-all duration-200 group"
+                        >
+                          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center flex-shrink-0 group-hover:from-emerald-600 group-hover:to-green-600 transition-all duration-200">
+                            <.icon
+                              name="hero-plus"
+                              class="w-4 h-4 text-gray-400 group-hover:text-white"
+                            />
+                          </div>
+                          <span class="text-sm text-gray-500 group-hover:text-gray-300">
+                            New Worktree
+                          </span>
+                        </button>
                       <% end %>
                     </div>
                   <% end %>
