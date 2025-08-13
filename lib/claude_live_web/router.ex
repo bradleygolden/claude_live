@@ -20,11 +20,15 @@ defmodule ClaudeLiveWeb.Router do
     # LiveViews with global terminal state management
     live_session :terminal_session,
       on_mount: {ClaudeLiveWeb.TerminalStateHook, :default} do
-      live "/", DashboardLive, :index
-      live "/dashboard/:repo_id", DashboardLive, :show
-      live "/dashboard/browse/directory", DirectoryBrowserLive, :browse
-      live "/dashboard/clone/github", RemoteCloneLive, :clone
-      live "/terminals/:terminal_id", TerminalLive, :index
+      # Terminal is now the main interface
+      live "/", TerminalLive, :index
+      live "/terminals/:terminal_id", TerminalLive, :show
+
+      # Repository management
+      live "/repositories/add/local", DirectoryBrowserLive, :browse
+      live "/repositories/add/github", RemoteCloneLive, :clone
+
+      # Git diff viewer
       live "/git-diff/:worktree_id", GitDiffLive, :index
     end
   end

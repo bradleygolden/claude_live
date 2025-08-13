@@ -33,7 +33,7 @@ defmodule ClaudeLiveWeb.DirectoryBrowserLive do
               navigate={~p"/"}
               class="px-4 py-2 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2"
             >
-              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back to Dashboard
+              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back to Terminal
             </.link>
           </div>
         </div>
@@ -223,11 +223,11 @@ defmodule ClaudeLiveWeb.DirectoryBrowserLive do
       params = %{"name" => name, "path" => path}
 
       case Ash.create(ClaudeLive.Claude.Repository, params) do
-        {:ok, repository} ->
+        {:ok, _repository} ->
           {:noreply,
            socket
            |> put_flash(:info, "Repository created successfully")
-           |> push_navigate(to: ~p"/dashboard/#{repository.id}")}
+           |> push_navigate(to: ~p"/")}
 
         {:error, _error} ->
           {:noreply, put_flash(socket, :error, "Failed to create repository")}

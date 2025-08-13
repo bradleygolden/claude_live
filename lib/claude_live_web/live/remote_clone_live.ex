@@ -37,7 +37,7 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
               navigate={~p"/"}
               class="px-4 py-2 text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-2"
             >
-              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back to Dashboard
+              <.icon name="hero-arrow-left" class="w-4 h-4" /> Back to Terminal
             </.link>
           </div>
         </div>
@@ -305,10 +305,8 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
   def handle_event("fetch-repo", %{"repo_url" => url}, socket) do
     socket = assign(socket, error_message: nil, repo_info: nil)
 
-    # Parse the input to get owner/repo format
     case parse_repo_input(url) do
       {:ok, owner, repo} ->
-        # Fetch repository information using gh CLI
         case fetch_repo_info(owner, repo) do
           {:ok, repo_info} ->
             {:noreply, assign(socket, :repo_info, repo_info)}
@@ -331,11 +329,9 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
   end
 
   def handle_event("clone-upstream", _params, socket) do
-    # Clone the upstream (original) repository instead of the fork
     repo_info = socket.assigns.repo_info
     parent = repo_info["parent"]
 
-    # Update repo_info to point to parent
     socket = assign(socket, :repo_info, parent)
     clone_repository(socket, :direct)
   end
@@ -363,7 +359,6 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
   end
 
   def handle_info({:clone_complete, {:ok, clone_path}}, socket) do
-    # Create repository record
     repo_info = socket.assigns.repo_info
     repo_name = repo_info["name"]
     owner = repo_info["owner"]["login"]
@@ -377,7 +372,6 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
       "github_name" => repo_name
     }
 
-    # Add upstream URL if it's a fork
     params =
       if repo_info["isFork"] && repo_info["parent"] do
         Map.put(params, "upstream_url", repo_info["parent"]["url"])
@@ -386,11 +380,11 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
       end
 
     case Ash.create(ClaudeLive.Claude.Repository, params) do
-      {:ok, repository} ->
+      {:ok, _repository} ->
         {:noreply,
          socket
          |> put_flash(:info, "Repository cloned successfully!")
-         |> push_navigate(to: ~p"/dashboard/#{repository.id}")}
+         |> push_navigate(to: ~p"/")}
 
       {:error, _error} ->
         {:noreply,
@@ -407,8 +401,6 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
      |> assign(:clone_progress, "")
      |> assign(:error_message, message)}
   end
-
-  # Private functions
 
   defp check_gh_auth do
     case System.find_executable("gh") do
@@ -434,12 +426,10 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
     input = String.trim(input)
 
     cond do
-      # Format: owner/repo
       String.match?(input, ~r/^[\w\-\.]+\/[\w\-\.]+$/) ->
         [owner, repo] = String.split(input, "/")
         {:ok, owner, repo}
 
-      # Format: https://github.com/owner/repo or git@github.com:owner/repo.git
       String.contains?(input, "github.com") ->
         case extract_owner_repo_from_url(input) do
           {owner, repo} when owner != "" and repo != "" ->
@@ -458,7 +448,6 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
     url = String.trim(url)
 
     cond do
-      # HTTPS format
       String.starts_with?(url, "https://github.com/") ->
         url
         |> String.replace("https://github.com/", "")
@@ -469,7 +458,6 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
           _ -> {"", ""}
         end
 
-      # SSH format
       String.starts_with?(url, "git@github.com:") ->
         url
         |> String.replace("git@github.com:", "")
@@ -517,13 +505,11 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
     owner = repo_info["owner"]["login"]
     repo_name = repo_info["name"]
 
-    # Determine clone path
     base_path = Path.join([System.user_home!(), "claude_live_repos"])
     File.mkdir_p!(base_path)
 
     clone_path = Path.join([base_path, owner, repo_name])
 
-    # Check if directory already exists
     if File.exists?(clone_path) do
       {:noreply, assign(socket, :error_message, "Repository already exists at #{clone_path}")}
     else
@@ -533,7 +519,6 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
         |> assign(:clone_progress, "Initializing...")
         |> assign(:clone_path, clone_path)
 
-      # Start clone process in a separate process
       self_pid = self()
 
       Task.start(fn ->
@@ -543,11 +528,9 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
               run_clone_direct(owner, repo_name, clone_path, self_pid)
 
             :fork ->
-              # Clone an existing fork and set up upstream
               run_clone_fork_with_upstream(owner, repo_name, clone_path, self_pid, repo_info)
 
             :fork_and_clone ->
-              # Fork first, then clone
               run_fork_and_clone(owner, repo_name, clone_path, self_pid)
           end
 
@@ -575,12 +558,10 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
   defp run_clone_fork_with_upstream(owner, repo, clone_path, pid, repo_info) do
     send(pid, {:clone_output, "Cloning fork..."})
 
-    # Clone the fork
     case System.cmd("gh", ["repo", "clone", "#{owner}/#{repo}", clone_path],
            stderr_to_stdout: true
          ) do
       {_output, 0} ->
-        # If it's a fork, set up upstream remote
         if repo_info["parent"] do
           parent_owner = repo_info["parent"]["owner"]["login"]
           parent_name = repo_info["parent"]["name"]
@@ -603,17 +584,14 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
               {:ok, clone_path}
 
             {output, _} ->
-              # If upstream already exists or other error, still consider it success
               if String.contains?(output, "already exists") do
                 {:ok, clone_path}
               else
                 Logger.warning("Failed to add upstream remote: #{output}")
-                # Still return success since clone worked
                 {:ok, clone_path}
               end
           end
         else
-          # Not actually a fork, just return success
           {:ok, clone_path}
         end
 
@@ -625,26 +603,22 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
   defp run_fork_and_clone(owner, repo, clone_path, pid) do
     send(pid, {:clone_output, "Creating fork..."})
 
-    # Fork the repository
     case System.cmd("gh", ["repo", "fork", "#{owner}/#{repo}", "--clone=false"],
            stderr_to_stdout: true
          ) do
       {_output, 0} ->
         send(pid, {:clone_output, "Fork created. Cloning..."})
 
-        # Get current user to determine fork owner
         case System.cmd("gh", ["api", "user", "--jq", ".login"], stderr_to_stdout: true) do
           {username, 0} ->
             username = String.trim(username)
 
-            # Clone the fork
             case System.cmd(
                    "gh",
                    ["repo", "clone", "#{username}/#{repo}", clone_path],
                    stderr_to_stdout: true
                  ) do
               {_output, 0} ->
-                # Set up upstream remote after cloning
                 case System.cmd(
                        "git",
                        ["remote", "add", "upstream", "https://github.com/#{owner}/#{repo}.git"],
@@ -656,12 +630,10 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
                     {:ok, clone_path}
 
                   {output, _} ->
-                    # If upstream already exists or other error, still consider it success
                     if String.contains?(output, "already exists") do
                       {:ok, clone_path}
                     else
                       Logger.warning("Failed to add upstream remote: #{output}")
-                      # Still return success since clone worked
                       {:ok, clone_path}
                     end
                 end
@@ -677,7 +649,7 @@ defmodule ClaudeLiveWeb.RemoteCloneLive do
       {output, _} ->
         if String.contains?(output, "already exists") do
           send(pid, {:clone_output, "Fork already exists. Cloning..."})
-          # Fork already exists, just clone it
+
           case System.cmd("gh", ["api", "user", "--jq", ".login"], stderr_to_stdout: true) do
             {username, 0} ->
               username = String.trim(username)

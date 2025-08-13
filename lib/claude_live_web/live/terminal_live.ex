@@ -279,7 +279,17 @@ defmodule ClaudeLiveWeb.TerminalLive do
   ]
 
   @impl true
-  def mount(%{"terminal_id" => terminal_id}, _session, socket) do
+  def mount(params, _session, socket) do
+    case params do
+      %{"terminal_id" => terminal_id} ->
+        mount_with_terminal(terminal_id, socket)
+
+      _ ->
+        mount_without_terminal(socket)
+    end
+  end
+
+  defp mount_with_terminal(terminal_id, socket) do
     terminal = ClaudeLive.TerminalManager.get_terminal(terminal_id)
 
     if terminal do
@@ -323,6 +333,42 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
+  defp mount_without_terminal(socket) do
+    all_terminals = ClaudeLive.TerminalManager.list_terminals()
+    all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+    projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
+
+    first_terminal =
+      case Map.keys(all_terminals) do
+        [first_id | _] -> first_id
+        [] -> nil
+      end
+
+    if first_terminal do
+      {:ok, push_navigate(socket, to: ~p"/terminals/#{first_terminal}")}
+    else
+      socket =
+        socket
+        |> assign(:terminal_id, nil)
+        |> assign(:terminal, nil)
+        |> assign(:session_id, nil)
+        |> assign(:subscribed, false)
+        |> assign(:page_title, "Terminal")
+        |> assign(:global_terminals, all_terminals)
+        |> assign(:projects_with_terminals, projects_with_terminals)
+        |> assign(:worktree_terminals, %{})
+        |> assign(:sidebar_collapsed, false)
+        |> assign(:expanded_projects, MapSet.new())
+        |> assign(:show_worktree_form, nil)
+        |> assign(:new_worktree_forms, %{})
+        |> assign(:show_add_repo_dropdown, false)
+        |> push_event("load-sidebar-state", %{})
+        |> push_event("load-expanded-projects", %{})
+
+      {:ok, socket}
+    end
+  end
+
   @impl true
   def handle_params(_params, _url, socket) do
     {:noreply, socket}
@@ -361,7 +407,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
       else
         case ClaudeLive.Terminal.Supervisor.start_terminal(session_id) do
           {:ok, _pid} ->
-            # Give the server a moment to fully initialize
             Process.sleep(50)
 
             try do
@@ -678,7 +723,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   def handle_event("create-terminal-for-worktree", %{"worktree-id" => worktree_id}, socket) do
-    # Find the worktree from the projects_with_terminals
     worktree_info =
       socket.assigns.projects_with_terminals
       |> Enum.flat_map(& &1.worktrees)
@@ -725,22 +769,18 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
       case Ash.destroy(worktree) do
         :ok ->
-          # Refresh all data
           all_terminals = ClaudeLive.TerminalManager.list_terminals()
           all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
           projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
-          # Check if we're currently viewing the archived worktree
           current_worktree_id = socket.assigns.terminal.worktree_id
 
           if current_worktree_id == worktree_id do
-            # Redirect to dashboard if we archived the current worktree
             {:noreply,
              socket
              |> put_flash(:info, "Worktree '#{worktree.branch}' has been archived")
              |> push_navigate(to: ~p"/")}
           else
-            # Just update the UI
             {:noreply,
              socket
              |> assign(:projects_with_terminals, projects_with_terminals)
@@ -878,26 +918,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
 
     :ok
-  end
-
-  defp get_dashboard_link(terminal) do
-    if terminal.worktree_id do
-      case get_repository_id(terminal.worktree_id) do
-        {:ok, repo_id} -> ~p"/dashboard/#{repo_id}"
-        _ -> ~p"/"
-      end
-    else
-      ~p"/"
-    end
-  end
-
-  defp get_repository_id(worktree_id) do
-    try do
-      worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, load: :repository)
-      {:ok, worktree.repository_id}
-    rescue
-      _ -> {:error, :not_found}
-    end
   end
 
   defp get_repository_name(terminal) do
@@ -1061,7 +1081,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <%= if assigns[:show_add_repo_dropdown] do %>
                 <div class="absolute left-0 right-0 mt-2 bg-gray-800 rounded-lg shadow-xl border border-gray-700 z-50">
                   <.link
-                    navigate={~p"/dashboard/browse/directory"}
+                    navigate={~p"/repositories/add/local"}
                     class="flex items-center gap-3 px-4 py-3 hover:bg-gray-700/50 transition-colors text-gray-300 hover:text-gray-100 rounded-t-lg"
                   >
                     <.icon name="hero-folder-open" class="w-5 h-5 text-gray-400" />
@@ -1071,7 +1091,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     </div>
                   </.link>
                   <.link
-                    navigate={~p"/dashboard/clone/github"}
+                    navigate={~p"/repositories/add/github"}
                     class="flex items-center gap-3 px-4 py-3 hover:bg-gray-700/50 transition-colors text-gray-300 hover:text-gray-100 rounded-b-lg border-t border-gray-700"
                   >
                     <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
@@ -1348,25 +1368,6 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <p class="text-sm font-medium text-gray-400">No workspaces open</p>
               <p class="text-xs text-gray-500 mt-2">Open a workspace from the dashboard</p>
             </div>
-          <% end %>
-        </div>
-        <div class="border-t border-gray-800/50 p-4">
-          <%= if @sidebar_collapsed do %>
-            <.link
-              navigate={get_dashboard_link(@terminal)}
-              class="flex items-center justify-center w-8 h-8 mx-auto rounded-lg bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 transition-all duration-200"
-              title="Back to Dashboard"
-            >
-              <.icon name="hero-arrow-left" class="w-4 h-4" />
-            </.link>
-          <% else %>
-            <.link
-              navigate={get_dashboard_link(@terminal)}
-              class="flex items-center justify-center text-sm font-medium bg-gray-800/50 hover:bg-gray-700/50 text-gray-300 hover:text-gray-100 rounded-lg px-4 py-2 transition-all duration-200"
-            >
-              <.icon name="hero-arrow-left" class="w-4 h-4" />
-              <span class="ml-2">Dashboard</span>
-            </.link>
           <% end %>
         </div>
       </div>
