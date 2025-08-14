@@ -321,6 +321,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> assign(:show_add_repo_dropdown, false)
+        |> assign(:show_archived, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -362,6 +363,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:show_worktree_form, nil)
         |> assign(:new_worktree_forms, %{})
         |> assign(:show_add_repo_dropdown, false)
+        |> assign(:show_archived, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -763,6 +765,79 @@ defmodule ClaudeLiveWeb.TerminalLive do
     {:noreply, assign(socket, :show_add_repo_dropdown, false)}
   end
 
+  def handle_event("toggle-archived", _params, socket) do
+    require Ash.Query
+
+    show_archived = !socket.assigns.show_archived
+
+    all_terminals = ClaudeLive.TerminalManager.list_terminals()
+
+    all_repositories =
+      if show_archived do
+        repositories = Ash.read!(ClaudeLive.Claude.Repository)
+
+        Enum.map(repositories, fn repo ->
+          # Read both active and archived worktrees
+          all_worktrees =
+            ClaudeLive.Claude.Worktree
+            |> Ash.Query.filter(repository_id == ^repo.id)
+            |> Ash.read!(action: :with_archived)
+
+          Map.put(repo, :worktrees, all_worktrees)
+        end)
+      else
+        Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+      end
+
+    projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
+
+    {:noreply,
+     socket
+     |> assign(:show_archived, show_archived)
+     |> assign(:projects_with_terminals, projects_with_terminals)}
+  end
+
+  def handle_event("restore-worktree", %{"worktree-id" => worktree_id}, socket) do
+    try do
+      worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id, action: :archived)
+
+      case Ash.update(worktree, action: :unarchive) do
+        {:ok, _restored} ->
+          all_terminals = ClaudeLive.TerminalManager.list_terminals()
+
+          all_repositories =
+            if socket.assigns.show_archived do
+              repositories = Ash.read!(ClaudeLive.Claude.Repository)
+
+              Enum.map(repositories, fn repo ->
+                all_worktrees =
+                  Ash.read!(ClaudeLive.Claude.Worktree,
+                    action: :with_archived,
+                    filter: [repository_id: repo.id]
+                  )
+
+                Map.put(repo, :worktrees, all_worktrees)
+              end)
+            else
+              Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
+            end
+
+          projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
+
+          {:noreply,
+           socket
+           |> assign(:projects_with_terminals, projects_with_terminals)
+           |> put_flash(:info, "Worktree '#{worktree.branch}' has been restored")}
+
+        {:error, error} ->
+          {:noreply, put_flash(socket, :error, "Failed to restore worktree: #{inspect(error)}")}
+      end
+    rescue
+      _ ->
+        {:noreply, put_flash(socket, :error, "Failed to restore worktree")}
+    end
+  end
+
   def handle_event("archive-worktree", %{"worktree-id" => worktree_id}, socket) do
     try do
       worktree = Ash.get!(ClaudeLive.Claude.Worktree, worktree_id)
@@ -773,7 +848,12 @@ defmodule ClaudeLiveWeb.TerminalLive do
           all_repositories = Ash.read!(ClaudeLive.Claude.Repository, load: :worktrees)
           projects_with_terminals = group_projects_and_terminals(all_repositories, all_terminals)
 
-          current_worktree_id = socket.assigns.terminal.worktree_id
+          current_worktree_id =
+            if socket.assigns[:terminal] && socket.assigns.terminal[:worktree_id] do
+              socket.assigns.terminal.worktree_id
+            else
+              nil
+            end
 
           if current_worktree_id == worktree_id do
             {:noreply,
@@ -923,8 +1003,26 @@ defmodule ClaudeLiveWeb.TerminalLive do
   defp get_repository_name(terminal) do
     if terminal.worktree_id do
       try do
-        worktree = Ash.get!(ClaudeLive.Claude.Worktree, terminal.worktree_id, load: :repository)
-        Path.basename(worktree.repository.path)
+        worktree =
+          case Ash.get(ClaudeLive.Claude.Worktree, terminal.worktree_id, load: :repository) do
+            {:ok, wt} ->
+              wt
+
+            {:error, _} ->
+              case Ash.get(ClaudeLive.Claude.Worktree, terminal.worktree_id,
+                     action: :with_archived,
+                     load: :repository
+                   ) do
+                {:ok, wt} -> wt
+                {:error, _} -> nil
+              end
+          end
+
+        if worktree && worktree.repository do
+          Path.basename(worktree.repository.path)
+        else
+          "Unknown Repository"
+        end
       rescue
         _ -> "Unknown Repository"
       end
@@ -950,7 +1048,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
           repository_id: first_terminal.repository_id,
           terminals: terminal_map,
           terminal_count: map_size(terminal_map),
-          has_connected: Enum.any?(terminal_map, fn {_id, t} -> t.connected end)
+          has_connected: Enum.any?(terminal_map, fn {_id, t} -> t.connected end),
+          archived_at: nil
         }
       end)
 
@@ -968,7 +1067,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
           existing = Enum.find(project_worktrees, fn w -> w.worktree_id == worktree.id end)
 
           if existing do
-            existing
+            Map.put(existing, :archived_at, Map.get(worktree, :archived_at))
           else
             %{
               worktree_id: worktree.id,
@@ -977,7 +1076,8 @@ defmodule ClaudeLiveWeb.TerminalLive do
               repository_id: repository.id,
               terminals: %{},
               terminal_count: 0,
-              has_connected: false
+              has_connected: false,
+              archived_at: Map.get(worktree, :archived_at)
             }
           end
         end)
@@ -1038,9 +1138,25 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   <h3 class="text-sm font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent uppercase tracking-wider">
                     Projects
                   </h3>
-                  <p class="text-xs text-gray-500 mt-2">
-                    {length(@projects_with_terminals)} project(s)
-                  </p>
+                  <div class="flex items-center gap-3 mt-2">
+                    <p class="text-xs text-gray-500">
+                      {length(@projects_with_terminals)} project(s)
+                    </p>
+                    <button
+                      phx-click="toggle-archived"
+                      class={[
+                        "text-xs px-2 py-0.5 rounded transition-all",
+                        if @show_archived do
+                          "bg-amber-900/50 text-amber-400 hover:bg-amber-800/50"
+                        else
+                          "bg-gray-800/50 text-gray-400 hover:bg-gray-700/50"
+                        end
+                      ]}
+                      title={if @show_archived, do: "Hide archived", else: "Show archived"}
+                    >
+                      {if @show_archived, do: "Hide Archived", else: "Show Archived"}
+                    </button>
+                  </div>
                 </div>
               <% end %>
               <button
@@ -1161,7 +1277,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
                     phx-value-project-id={project.repository_id || "unknown"}
                     class={[
                       "w-full px-3 py-2 rounded-lg flex items-center justify-between transition-all duration-200 hover:bg-gray-800/50 group",
-                      Enum.any?(project.worktrees, fn w -> w.worktree_id == @terminal.worktree_id end) &&
+                      @terminal &&
+                        Enum.any?(project.worktrees, fn w ->
+                          w.worktree_id == @terminal.worktree_id
+                        end) &&
                         "bg-gradient-to-r from-blue-950/30 to-indigo-950/30"
                     ]}
                   >
@@ -1208,87 +1327,118 @@ defmodule ClaudeLiveWeb.TerminalLive do
                   <%= if MapSet.member?(@expanded_projects, project.repository_id || "unknown") do %>
                     <div class="ml-6 mt-1">
                       <%= for worktree <- project.worktrees do %>
-                        <% first_terminal = Enum.at(worktree.terminals, 0) %>
-                        <%= if first_terminal do %>
-                          <% {first_terminal_id, _} = first_terminal %>
-                          <div class={[
-                            "mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
-                            worktree.worktree_id == @terminal.worktree_id &&
-                              "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30"
-                          ]}>
-                            <.link
-                              navigate={~p"/terminals/#{first_terminal_id}"}
-                              class="block px-3 py-2 transition-all duration-200 rounded-lg overflow-hidden"
-                            >
-                              <div class="flex items-center space-x-2">
-                                <div class={[
-                                  "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                                  (worktree.has_connected &&
-                                     "bg-gradient-to-br from-emerald-500 to-green-600") ||
-                                    "bg-gradient-to-br from-gray-600 to-gray-700"
-                                ]}>
-                                  <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
-                                </div>
+                        <%= if worktree.archived_at do %>
+                          <!-- Archived worktree -->
+                          <div class="mb-1 rounded-lg bg-gray-900/50 border border-gray-800 opacity-60 hover:opacity-80 transition-all duration-200 group relative">
+                            <div class="px-3 py-2 flex items-center space-x-2">
+                              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center flex-shrink-0">
+                                <.icon name="hero-archive-box" class="w-4 h-4 text-gray-400" />
+                              </div>
+                              <div class="flex items-center gap-2 flex-1">
                                 <div class="flex-1 min-w-0 overflow-hidden">
-                                  <div class={[
-                                    "text-sm font-medium truncate",
-                                    (worktree.has_connected && "text-white") || "text-gray-300"
-                                  ]}>
+                                  <div class="text-sm font-medium truncate text-gray-500 line-through">
                                     {worktree.branch}
                                   </div>
-                                  <div class="text-xs text-gray-500 truncate">
-                                    {worktree.terminal_count} terminal{if worktree.terminal_count !=
-                                                                            1,
-                                                                          do: "s"}
+                                  <div class="text-xs text-gray-600">
+                                    Archived
                                   </div>
                                 </div>
-                                <span class={[
-                                  "w-1.5 h-1.5 rounded-full flex-shrink-0",
-                                  (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
-                                    "bg-gray-600"
-                                ]}>
+                                <span class="text-xs text-amber-400 px-2 py-0.5 bg-amber-900/30 rounded">
+                                  Archived
                                 </span>
                               </div>
-                            </.link>
-                            <!-- Archive button on hover -->
+                            </div>
+                            <!-- Restore button on hover -->
                             <button
-                              phx-click="archive-worktree"
+                              phx-click="restore-worktree"
                               phx-value-worktree-id={worktree.worktree_id}
-                              class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-red-600/80 text-gray-300 hover:text-white z-10"
-                              title="Archive worktree"
+                              class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-emerald-600/80 text-gray-300 hover:text-white z-10"
+                              title="Restore worktree"
                             >
-                              <.icon name="hero-archive-box" class="w-3 h-3" />
+                              <.icon name="hero-arrow-uturn-left" class="w-3 h-3" />
                             </button>
                           </div>
                         <% else %>
-                          <div class="mb-1 rounded-lg hover:bg-gray-800/50 transition-all duration-200 group relative">
-                            <button
-                              phx-click="create-terminal-for-worktree"
-                              phx-value-worktree-id={worktree.worktree_id}
-                              class="w-full px-3 py-2 flex items-center space-x-2 text-left"
-                            >
-                              <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center flex-shrink-0">
-                                <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
-                              </div>
-                              <div class="flex-1 min-w-0 overflow-hidden">
-                                <div class="text-sm font-medium truncate text-gray-400">
-                                  {worktree.branch}
+                          <% first_terminal = Enum.at(worktree.terminals, 0) %>
+                          <%= if first_terminal do %>
+                            <% {first_terminal_id, _} = first_terminal %>
+                            <div class={[
+                              "mb-1 rounded-lg group relative transition-all duration-200 hover:bg-gray-800/50",
+                              worktree.worktree_id == @terminal.worktree_id &&
+                                "bg-gradient-to-r from-emerald-950/30 to-cyan-950/30"
+                            ]}>
+                              <button
+                                phx-click="archive-worktree"
+                                phx-value-worktree-id={worktree.worktree_id}
+                                class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-red-600/80 text-gray-300 hover:text-white z-20"
+                                title="Archive worktree"
+                              >
+                                <.icon name="hero-archive-box" class="w-3 h-3" />
+                              </button>
+                              <.link
+                                navigate={~p"/terminals/#{first_terminal_id}"}
+                                class="block px-3 py-2 transition-all duration-200 rounded-lg overflow-hidden"
+                              >
+                                <div class="flex items-center space-x-2">
+                                  <div class={[
+                                    "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
+                                    (worktree.has_connected &&
+                                       "bg-gradient-to-br from-emerald-500 to-green-600") ||
+                                      "bg-gradient-to-br from-gray-600 to-gray-700"
+                                  ]}>
+                                    <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
+                                  </div>
+                                  <div class="flex-1 min-w-0 overflow-hidden">
+                                    <div class={[
+                                      "text-sm font-medium truncate",
+                                      (worktree.has_connected && "text-white") || "text-gray-300"
+                                    ]}>
+                                      {worktree.branch}
+                                    </div>
+                                    <div class="text-xs text-gray-500 truncate">
+                                      {worktree.terminal_count} terminal{if worktree.terminal_count !=
+                                                                              1,
+                                                                            do: "s"}
+                                    </div>
+                                  </div>
+                                  <span class={[
+                                    "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                                    (worktree.has_connected && "bg-emerald-400 animate-pulse") ||
+                                      "bg-gray-600"
+                                  ]}>
+                                  </span>
                                 </div>
-                                <div class="text-xs text-gray-500 truncate">
-                                  No terminals
+                              </.link>
+                            </div>
+                          <% else %>
+                            <div class="mb-1 rounded-lg hover:bg-gray-800/50 transition-all duration-200 group relative">
+                              <button
+                                phx-click="archive-worktree"
+                                phx-value-worktree-id={worktree.worktree_id}
+                                class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-red-600/80 text-gray-300 hover:text-white z-20"
+                                title="Archive worktree"
+                              >
+                                <.icon name="hero-archive-box" class="w-3 h-3" />
+                              </button>
+                              <button
+                                phx-click="create-terminal-for-worktree"
+                                phx-value-worktree-id={worktree.worktree_id}
+                                class="w-full px-3 py-2 flex items-center space-x-2 text-left"
+                              >
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-600 to-gray-700 flex items-center justify-center flex-shrink-0">
+                                  <.icon name="hero-folder-open" class="w-4 h-4 text-white" />
                                 </div>
-                              </div>
-                            </button>
-                            <!-- Archive button on hover -->
-                            <button
-                              phx-click="archive-worktree"
-                              phx-value-worktree-id={worktree.worktree_id}
-                              class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded-md bg-gray-700/80 hover:bg-red-600/80 text-gray-300 hover:text-white z-10"
-                              title="Archive worktree"
-                            >
-                              <.icon name="hero-archive-box" class="w-3 h-3" />
-                            </button>
-                          </div>
+                                <div class="flex-1 min-w-0 overflow-hidden">
+                                  <div class="text-sm font-medium truncate text-gray-400">
+                                    {worktree.branch}
+                                  </div>
+                                  <div class="text-xs text-gray-500 truncate">
+                                    No terminals
+                                  </div>
+                                </div>
+                              </button>
+                            </div>
+                          <% end %>
                         <% end %>
                       <% end %>
 
@@ -1378,92 +1528,103 @@ defmodule ClaudeLiveWeb.TerminalLive do
               <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center">
                 <.icon name="hero-command-line" class="w-4 h-4 text-white" />
               </div>
-              <div>
-                <h2 class="text-white font-bold">{get_repository_name(@terminal)}</h2>
-                <div class="flex items-center gap-2 text-xs">
-                  <span class="text-emerald-400">{@terminal.worktree_branch}</span>
-                  <span class="text-gray-600">•</span>
-                  <span class="text-gray-500 truncate max-w-md">
-                    {@terminal.worktree_path}
-                  </span>
+              <%= if @terminal do %>
+                <div>
+                  <h2 class="text-white font-bold">{get_repository_name(@terminal)}</h2>
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="text-emerald-400">{@terminal.worktree_branch}</span>
+                    <span class="text-gray-600">•</span>
+                    <span class="text-gray-500 truncate max-w-md">
+                      {@terminal.worktree_path}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              <% else %>
+                <div>
+                  <h2 class="text-white font-bold">No Terminal Selected</h2>
+                  <div class="text-xs text-gray-500">
+                    Select a terminal from the sidebar or create a new one
+                  </div>
+                </div>
+              <% end %>
             </div>
           </div>
           <div class="flex items-center space-x-4">
-            <div class="flex items-center space-x-2">
-              <a
-                href={"iterm2://app/command?d=#{URI.encode(@terminal.worktree_path)}&c=#{URI.encode("cd #{@terminal.worktree_path} && claude code")}"}
-                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                title="Open in iTerm2"
-              >
-                <svg
-                  class="w-4 h-4 text-gray-500 dark:text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+            <%= if @terminal do %>
+              <div class="flex items-center space-x-2">
+                <a
+                  href={"iterm2://app/command?d=#{URI.encode(@terminal.worktree_path)}&c=#{URI.encode("cd #{@terminal.worktree_path} && claude code")}"}
+                  class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                  title="Open in iTerm2"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-              </a>
-              <button
-                phx-click="open-in-zed"
-                class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                title="Open in Zed"
-              >
-                <svg
-                  class="w-4 h-4 text-gray-500 dark:text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                  <svg
+                    class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </a>
+                <button
+                  phx-click="open-in-zed"
+                  class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                  title="Open in Zed"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                  />
-                </svg>
-              </button>
-              <.link
-                navigate={~p"/git-diff/terminal-#{@terminal_id}"}
-                class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
-                title="View git diffs"
-              >
-                <svg
-                  class="w-4 h-4 text-gray-500 hover:text-gray-300"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+                  <svg
+                    class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
+                  </svg>
+                </button>
+                <.link
+                  navigate={~p"/git-diff/terminal-#{@terminal_id}"}
+                  class="flex items-center justify-center w-7 h-7 rounded hover:bg-gray-800/50 transition-colors"
+                  title="View git diffs"
                 >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                  />
-                </svg>
-              </.link>
-            </div>
-            <div class="flex items-center space-x-2">
-              <span class={[
-                "inline-block w-2 h-2 rounded-full",
-                (@terminal.connected &&
-                   "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
-              ]}>
-              </span>
-              <span class={[
-                "text-sm font-medium",
-                (@terminal.connected && "text-emerald-400") || "text-red-400"
-              ]}>
-                {if @terminal.connected, do: "Connected", else: "Disconnected"}
-              </span>
-            </div>
+                  <svg
+                    class="w-4 h-4 text-gray-500 hover:text-gray-300"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                    />
+                  </svg>
+                </.link>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span class={[
+                  "inline-block w-2 h-2 rounded-full",
+                  (@terminal.connected &&
+                     "bg-emerald-400 animate-pulse shadow-emerald-400/50 shadow-sm") || "bg-red-500"
+                ]}>
+                </span>
+                <span class={[
+                  "text-sm font-medium",
+                  (@terminal.connected && "text-emerald-400") || "text-red-400"
+                ]}>
+                  {if @terminal.connected, do: "Connected", else: "Disconnected"}
+                </span>
+              </div>
+            <% end %>
           </div>
         </div>
         <div class="bg-gray-950 border-b border-gray-800/50">

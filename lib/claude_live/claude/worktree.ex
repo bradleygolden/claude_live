@@ -2,7 +2,13 @@ defmodule ClaudeLive.Claude.Worktree do
   use Ash.Resource,
     otp_app: :claude_live,
     domain: ClaudeLive.Claude,
-    data_layer: AshSqlite.DataLayer
+    data_layer: AshSqlite.DataLayer,
+    extensions: [AshArchival.Resource]
+
+  archive do
+    attribute :archived_at
+    exclude_read_actions([:archived, :with_archived])
+  end
 
   attributes do
     uuid_primary_key :id
@@ -41,6 +47,25 @@ defmodule ClaudeLive.Claude.Worktree do
 
   actions do
     defaults [:read, update: :*]
+
+    read :archived do
+      filter expr(not is_nil(archived_at))
+    end
+
+    read :with_archived do
+    end
+
+    update :unarchive do
+      accept []
+      require_atomic? false
+      change set_attribute(:archived_at, nil)
+      skip_unknown_inputs [:updated_at]
+
+      # Disable stale record check since we're working with archived records
+      change fn changeset, _context ->
+        Map.put(changeset, :check_stale_record?, false)
+      end
+    end
 
     create :create do
       primary? true
