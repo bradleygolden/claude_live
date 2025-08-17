@@ -88,11 +88,14 @@ defmodule ClaudeLiveWeb.ClaudeAssistantLive do
           try do
             ClaudeLive.Terminal.PtyServer.subscribe(session_id, self())
 
+            workspace_dir = Path.join([System.tmp_dir!(), "claude_workspace", session_id])
+            File.mkdir_p!(workspace_dir)
+
             ClaudeLive.Terminal.PtyServer.spawn_shell(session_id,
               cols: cols,
               rows: rows,
               shell: System.get_env("SHELL", "/bin/bash"),
-              cwd: File.cwd!()
+              cwd: workspace_dir
             )
 
             {:noreply, assign(socket, :connected, true)}
