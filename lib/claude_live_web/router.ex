@@ -14,6 +14,22 @@ defmodule ClaudeLiveWeb.Router do
     plug :accepts, ["json"]
   end
 
+  scope "/mcp" do
+    forward "/", AshAi.Mcp.Router,
+      tools: [
+        :create_worktree,
+        :archive_worktree,
+        :restore_worktree,
+        :list_worktrees,
+        :list_archived_worktrees,
+        :create_repository,
+        :list_repositories,
+        :sync_worktrees
+      ],
+      protocol_version_statement: "2024-11-05",
+      otp_app: :claude_live
+  end
+
   scope "/", ClaudeLiveWeb do
     pipe_through :browser
 

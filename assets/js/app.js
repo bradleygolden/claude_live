@@ -25,7 +25,11 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/claude_live"
 import topbar from "topbar"
 import { TerminalManager } from "./terminal"
+import TerminalManagerSingleton from "./terminal_manager_singleton"
 import { DiffViewerHook } from "./git_diff"
+import ClaudeAssistantTerminal from "./claude_assistant_hook"
+import ResizeHandle from "./resize_handle"
+import TerminalStateManager from "./terminal_state_manager"
 
 const TerminalHook = {
   mounted() {
@@ -64,8 +68,8 @@ const TerminalHook = {
 
 const SingleTerminalHook = {
   mounted() {
-    this.terminalManager = new TerminalManager()
-    this.terminalManager.setEventHandler(this.pushEvent.bind(this))
+    // Use the singleton terminal manager
+    this.terminalManagerSingleton = TerminalManagerSingleton.getInstance()
     
     const terminalId = this.el.dataset.terminalId
     
@@ -76,28 +80,36 @@ const SingleTerminalHook = {
     
     this.terminalId = terminalId
     
+    // Add click handler to focus this terminal when clicked
+    this.el.addEventListener('mousedown', (e) => {
+      console.log('Main terminal clicked, focusing:', terminalId)
+      this.terminalManagerSingleton.focusTerminal(terminalId)
+      e.stopPropagation()
+    })
+    
     this.handleEvent("terminal_output", ({ data }) => {
-      this.terminalManager.writeToTerminal(this.terminalId, data)
+      this.terminalManagerSingleton.writeToTerminal(this.terminalId, data)
     })
     
     this.handleEvent("terminal_exit", () => {
-      this.terminalManager.handleTerminalExit(this.terminalId)
+      this.terminalManagerSingleton.handleTerminalExit(this.terminalId)
     })
     
     this.handleEvent("terminal_closed", () => {
-      this.terminalManager.handleTerminalClosed(this.terminalId)
+      this.terminalManagerSingleton.handleTerminalClosed(this.terminalId)
     })
     
     setTimeout(() => {
       if (this.terminalId) {
-        this.terminalManager.initTerminal(this.terminalId)
+        // Initialize with the push event handler bound to this hook
+        this.terminalManagerSingleton.initTerminal(this.terminalId, this.pushEvent.bind(this))
       }
     }, 100)
   },
   
   destroyed() {
-    if (this.terminalManager) {
-      this.terminalManager.destroy()
+    if (this.terminalManagerSingleton && this.terminalId) {
+      this.terminalManagerSingleton.closeTerminal(this.terminalId)
     }
   }
 }
@@ -122,7 +134,7 @@ const SidebarState = {
   }
 }
 
-const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook, SidebarState }
+const hooks = { ...colocatedHooks, TerminalHook, SingleTerminalHook, DiffViewer: DiffViewerHook, SidebarState, ClaudeAssistantTerminal, ResizeHandle, TerminalStateManager }
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

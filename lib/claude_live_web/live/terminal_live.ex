@@ -322,6 +322,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:new_worktree_forms, %{})
         |> assign(:show_add_repo_dropdown, false)
         |> assign(:show_archived, false)
+        |> assign(:claude_terminal_visible, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -364,6 +365,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:new_worktree_forms, %{})
         |> assign(:show_add_repo_dropdown, false)
         |> assign(:show_archived, false)
+        |> assign(:claude_terminal_visible, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -377,6 +379,57 @@ defmodule ClaudeLiveWeb.TerminalLive do
   end
 
   @impl true
+  def handle_event(
+        "connect",
+        %{"cols" => cols, "rows" => rows, "terminal_id" => "claude-terminal"},
+        socket
+      ) do
+    require Logger
+    Logger.info("Claude terminal connect event received: cols=#{cols}, rows=#{rows}")
+
+    # Start a claude terminal process
+    claude_session_id =
+      socket.assigns[:claude_session_id] || "claude-#{System.unique_integer([:positive])}"
+
+    Logger.info("Starting Claude terminal with session_id: #{claude_session_id}")
+
+    # Start the Claude command in the project directory using Terminal Supervisor
+    result =
+      ClaudeLive.Terminal.Supervisor.start_terminal(claude_session_id,
+        path: "/Users/bradleygolden/Development/bradleygolden/claude_live"
+      )
+
+    Logger.info("Terminal supervisor result: #{inspect(result)}")
+
+    case result do
+      {:ok, _pid} ->
+        ClaudeLive.Terminal.PtyServer.subscribe(claude_session_id, self())
+
+        # Spawn the claude shell
+        ClaudeLive.Terminal.PtyServer.spawn_shell(claude_session_id,
+          cols: cols,
+          rows: rows,
+          shell: "claude",
+          cwd: "/Users/bradleygolden/Development/bradleygolden/claude_live"
+        )
+
+        {:noreply,
+         socket
+         |> assign(:claude_session_id, claude_session_id)
+         |> push_event("claude_output", %{data: "Starting Claude terminal...\r\n"})}
+
+      {:error, {:already_started, _pid}} ->
+        ClaudeLive.Terminal.PtyServer.subscribe(claude_session_id, self())
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply,
+         push_event(socket, "claude_output", %{
+           data: "Failed to start Claude: #{inspect(reason)}\r\n"
+         })}
+    end
+  end
+
   def handle_event("connect", %{"cols" => cols, "rows" => rows}, socket) do
     session_id = socket.assigns.session_id
     terminal = socket.assigns.terminal
@@ -765,6 +818,36 @@ defmodule ClaudeLiveWeb.TerminalLive do
     {:noreply, assign(socket, :show_add_repo_dropdown, false)}
   end
 
+  def handle_event("claude_disconnect", _params, socket) do
+    if claude_session_id = socket.assigns[:claude_session_id] do
+      ClaudeLive.Terminal.PtyServer.unsubscribe(claude_session_id, self())
+      # Note: We don't stop the terminal here, just unsubscribe
+      # The terminal will be cleaned up by the supervisor if needed
+    end
+
+    {:noreply, socket |> assign(:claude_session_id, nil)}
+  end
+
+  def handle_event("input", %{"data" => data, "terminal_id" => "claude-terminal"}, socket) do
+    if claude_session_id = socket.assigns[:claude_session_id] do
+      ClaudeLive.Terminal.PtyServer.write(claude_session_id, data)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event(
+        "resize",
+        %{"cols" => cols, "rows" => rows, "terminal_id" => "claude-terminal"},
+        socket
+      ) do
+    if claude_session_id = socket.assigns[:claude_session_id] do
+      ClaudeLive.Terminal.PtyServer.resize(claude_session_id, cols, rows)
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_event("toggle-archived", _params, socket) do
     require Ash.Query
 
@@ -879,14 +962,21 @@ defmodule ClaudeLiveWeb.TerminalLive do
 
   @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
-    if session_id == socket.assigns.session_id do
-      {:noreply, push_event(socket, "terminal_output", %{data: data})}
-    else
-      Logger.warning(
-        "Terminal #{socket.assigns.terminal_id} received data for wrong session: #{session_id}"
-      )
+    cond do
+      session_id == socket.assigns[:claude_session_id] ->
+        # This is data for the Claude terminal
+        {:noreply, push_event(socket, "claude_output", %{data: data})}
 
-      {:noreply, socket}
+      session_id == socket.assigns.session_id ->
+        # This is data for the regular terminal
+        {:noreply, push_event(socket, "terminal_output", %{data: data})}
+
+      true ->
+        Logger.warning(
+          "Terminal #{socket.assigns.terminal_id} received data for wrong session: #{session_id}"
+        )
+
+        {:noreply, socket}
     end
   end
 

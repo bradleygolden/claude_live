@@ -31,6 +31,7 @@ defmodule ClaudeLive.MixProject do
       {:oban, "~> 2.0"},
       {:ash_oban, "~> 0.4"},
       {:ash_archival, "~> 2.0"},
+      {:ash_ai, "~> 0.2"},
       {:usage_rules, "~> 0.1", only: [:dev]},
       {:claude, "~> 0.2", only: [:dev], runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]},

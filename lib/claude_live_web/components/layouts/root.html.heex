@@ -42,5 +42,9 @@
   </head>
   <body>
     {@inner_content}
+    {live_render(@conn || @socket, ClaudeLiveWeb.ClaudeAssistantLive,
+      id: "claude-assistant",
+      sticky: true
+    )}
   </body>
 </html>

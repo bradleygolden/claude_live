@@ -1,5 +1,5 @@
 [
-  import_deps: [:ash_oban, :oban, :ash, :ash_sqlite, :ecto, :ecto_sql, :phoenix],
+  import_deps: [:ash_ai, :ash_oban, :oban, :ash, :ash_sqlite, :ecto, :ecto_sql, :phoenix],
   subdirectories: ["priv/*/migrations"],
   plugins: [Phoenix.LiveView.HTMLFormatter],
   inputs: [
