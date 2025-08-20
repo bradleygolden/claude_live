@@ -188,5 +188,13 @@
     post_tool_use: [:compile, :format],
     pre_tool_use: [:compile, :format, :unused_deps],
     subagent_stop: [:compile, :format]
-  }
+  },
+  # Experimental webhook reporter for hook events
+  reporters: [
+    {:webhook,
+     url: "http://localhost:4000/api/claude/webhooks",
+     headers: %{"Content-Type" => "application/json"},
+     timeout: 5000,
+     retry_count: 3}
+  ]
 }

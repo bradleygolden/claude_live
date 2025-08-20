@@ -30,6 +30,12 @@ defmodule ClaudeLiveWeb.Router do
       otp_app: :claude_live
   end
 
+  scope "/api", ClaudeLiveWeb do
+    pipe_through :api
+
+    post "/claude/webhooks", ClaudeWebhookController, :webhook
+  end
+
   scope "/", ClaudeLiveWeb do
     pipe_through :browser
 
