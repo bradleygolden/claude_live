@@ -33,7 +33,7 @@ defmodule ClaudeLive.MixProject do
       {:ash_archival, "~> 2.0"},
       {:ash_ai, "~> 0.2"},
       {:usage_rules, "~> 0.1", only: [:dev]},
-      {:claude, "~> 0.2", only: [:dev], runtime: false},
+      {:claude, "~> 0.5.0", only: [:dev], runtime: false},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:ash_sqlite, "~> 0.2"},
       {:ash_postgres, "~> 2.0"},
