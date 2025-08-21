@@ -6,7 +6,8 @@ defmodule ClaudeLive.Claude.Event do
   use Ash.Resource,
     otp_app: :claude_live,
     domain: ClaudeLive.Claude,
-    data_layer: AshSqlite.DataLayer
+    data_layer: AshSqlite.DataLayer,
+    notifiers: [Ash.Notifier.PubSub]
 
   attributes do
     uuid_primary_key :id
@@ -77,6 +78,15 @@ defmodule ClaudeLive.Claude.Event do
       allow_nil? true
       attribute_type :uuid
     end
+  end
+
+  pub_sub do
+    module ClaudeLiveWeb.Endpoint
+    prefix "claude_events"
+
+    publish :from_webhook, ["created"]
+    publish :from_webhook, ["created", :worktree_id]
+    publish :from_webhook, ["created", :event_type]
   end
 
   actions do

@@ -295,6 +295,13 @@ defmodule ClaudeLiveWeb.TerminalLive do
     if terminal do
       ClaudeLive.TerminalManager.subscribe()
 
+      if terminal.worktree_id do
+        Phoenix.PubSub.subscribe(
+          ClaudeLive.PubSub,
+          "claude_events:created:#{terminal.worktree_id}"
+        )
+      end
+
       worktree_terminals =
         if terminal.worktree_id do
           ClaudeLive.TerminalManager.list_worktree_terminals(terminal.worktree_id)
@@ -323,6 +330,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:show_add_repo_dropdown, false)
         |> assign(:show_archived, false)
         |> assign(:claude_terminal_visible, false)
+        |> assign(:has_notifications, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -366,6 +374,7 @@ defmodule ClaudeLiveWeb.TerminalLive do
         |> assign(:show_add_repo_dropdown, false)
         |> assign(:show_archived, false)
         |> assign(:claude_terminal_visible, false)
+        |> assign(:has_notifications, false)
         |> push_event("load-sidebar-state", %{})
         |> push_event("load-expanded-projects", %{})
 
@@ -960,6 +969,10 @@ defmodule ClaudeLiveWeb.TerminalLive do
     end
   end
 
+  def handle_event("dismiss-notifications", _params, socket) do
+    {:noreply, assign(socket, :has_notifications, false)}
+  end
+
   @impl true
   def handle_info({ClaudeLive.Terminal.PtyServer, session_id, {:terminal_data, data}}, socket) do
     cond do
@@ -1075,6 +1088,17 @@ defmodule ClaudeLiveWeb.TerminalLive do
   @impl true
   def handle_info({:ui_preference_updated, _}, socket) do
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(%Ash.Notifier.Notification{data: event, action: %{name: :from_webhook}}, socket) do
+    if event.event_type == :notification do
+      Logger.info("Received Claude notification event for worktree #{event.worktree_id}")
+      {:noreply, assign(socket, :has_notifications, true)}
+    else
+      Logger.debug("Received Claude event: #{event.event_type}")
+      {:noreply, socket}
+    end
   end
 
   @impl true
@@ -1407,10 +1431,43 @@ defmodule ClaudeLiveWeb.TerminalLive do
                         </div>
                       </div>
                     </div>
-                    <span class={[
-                      "w-2 h-2 rounded-full flex-shrink-0",
-                      (project.has_connected && "bg-emerald-400 animate-pulse") || "bg-gray-600"
-                    ]}>
+                    <span
+                      phx-click={
+                        if @has_notifications &&
+                             Enum.any?(project.worktrees, &(&1.worktree_id == @terminal.worktree_id)) do
+                          "dismiss-notifications"
+                        else
+                          nil
+                        end
+                      }
+                      class={[
+                        "w-2 h-2 rounded-full flex-shrink-0",
+                        if(
+                          @has_notifications &&
+                            Enum.any?(project.worktrees, &(&1.worktree_id == @terminal.worktree_id)),
+                          do: "cursor-pointer"
+                        ),
+                        cond do
+                          @has_notifications &&
+                              Enum.any?(project.worktrees, &(&1.worktree_id == @terminal.worktree_id)) ->
+                            "bg-blue-400 animate-pulse"
+
+                          project.has_connected ->
+                            "bg-emerald-400 animate-pulse"
+
+                          true ->
+                            "bg-gray-600"
+                        end
+                      ]}
+                      title={
+                        if @has_notifications &&
+                             Enum.any?(project.worktrees, &(&1.worktree_id == @terminal.worktree_id)) do
+                          "Click to dismiss Claude notifications"
+                        else
+                          nil
+                        end
+                      }
+                    >
                     </span>
                   </button>
 
