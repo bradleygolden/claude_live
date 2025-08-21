@@ -11,6 +11,7 @@ get_git_repo_root = fn -> git_cmd.(["rev-parse", "--show-toplevel"]) end
 get_project_dir = fn -> System.get_env("CLAUDE_PROJECT_DIR", "") end
 
 %{
+  auto_fetch_deps?: true,
   mcp_servers: [:tidewave],
   subagents: [
     %{
@@ -101,7 +102,7 @@ get_project_dir = fn -> System.get_env("CLAUDE_PROJECT_DIR", "") end
       - **:when** - Tool/event matcher (atoms, strings, or lists)
       - **:command** - Additional Bash command pattern (string or regex)
       - **:halt_pipeline?** - Stop subsequent hooks on failure (default: false)
-      - **:blocking?** - Convert non-zero exit to code 2 (default: true)  
+      - **:blocking?** - Convert non-zero exit to code 2 (default: true)
       - **:env** - Environment variables map
 
       ### Exit Code Meanings
