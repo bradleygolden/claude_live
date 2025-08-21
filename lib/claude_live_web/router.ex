@@ -33,6 +33,7 @@ defmodule ClaudeLiveWeb.Router do
   scope "/api", ClaudeLiveWeb do
     pipe_through :api
 
+    post "/claude/webhooks/:worktree_id", ClaudeWebhookController, :webhook_with_worktree
     post "/claude/webhooks", ClaudeWebhookController, :webhook
   end
 

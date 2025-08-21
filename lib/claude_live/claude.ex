@@ -7,6 +7,7 @@ defmodule ClaudeLive.Claude do
     resource ClaudeLive.Claude.Repository
     resource ClaudeLive.Claude.Worktree
     resource ClaudeLive.Claude.Session
+    resource ClaudeLive.Claude.Event
   end
 
   tools do
