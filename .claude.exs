@@ -1,3 +1,15 @@
+git_cmd = fn args ->
+  case System.cmd("git", args, cd: System.get_env("CLAUDE_PROJECT_DIR", ".")) do
+    {output, 0} -> String.trim(output)
+    _ -> ""
+  end
+end
+
+get_git_branch = fn -> git_cmd.(["branch", "--show-current"]) end
+get_git_commit = fn -> git_cmd.(["rev-parse", "HEAD"]) end
+get_git_repo_root = fn -> git_cmd.(["rev-parse", "--show-toplevel"]) end
+get_project_dir = fn -> System.get_env("CLAUDE_PROJECT_DIR", "") end
+
 %{
   mcp_servers: [:tidewave],
   subagents: [
@@ -188,5 +200,18 @@
     post_tool_use: [:compile, :format],
     pre_tool_use: [:compile, :format, :unused_deps],
     subagent_stop: [:compile, :format]
-  }
+  },
+  reporters: [
+    {:webhook,
+     url: "http://localhost:4000/api/claude/webhooks",
+     headers: %{
+       "Content-Type" => "application/json",
+       "X-Git-Branch" => get_git_branch.(),
+       "X-Git-Commit" => get_git_commit.(),
+       "X-Git-Repo-Root" => get_git_repo_root.(),
+       "X-Project-Dir" => get_project_dir.()
+     },
+     timeout: 5000,
+     retry_count: 3}
+  ]
 }
